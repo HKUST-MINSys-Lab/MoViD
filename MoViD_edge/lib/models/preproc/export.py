@@ -1,6 +1,6 @@
 """
-简化的TensorRT模型使用示例
-这个版本更容易理解和使用
+Simplified TensorRT model usage example
+This version is easier to understand and use
 """
 
 import cv2
@@ -16,54 +16,54 @@ import os.path as osp
 from pathlib import Path
 
 class SimpleTensorRTDetection:
-    """简化的TensorRT检测模型"""
+    """Simplified TensorRT detection model"""
     
     def __init__(self, device='cuda:0'):
-        """初始化TensorRT检测模型"""
+        """Initialize the TensorRT detection model"""
         self.device = device
         self.logger = trt.Logger(trt.Logger.WARNING)
         self.runtime = trt.Runtime(self.logger)
         self.setup_paths()
         
-        # 首次运行时转换模型
+        # Convert the model on first use
         self.convert_models_if_needed()
         
-        # 加载TensorRT引擎
+        # Load the TensorRT engine
         self.load_engines()
     
     def setup_paths(self):
-        """设置路径"""
-        # 使用绝对路径
+        """Configure paths"""
+        # Use absolute paths
         self.base_dir = Path("/home/dlq/WHAM")
         self.checkpoints_dir = self.base_dir / "checkpoints"
         self.engines_dir = self.base_dir / "engines"
         
-        # 如果目录不存在，则创建
+        # Create the directory if it does not exist
         self.checkpoints_dir.mkdir(exist_ok=True)
         self.engines_dir.mkdir(exist_ok=True)
         
-        # 模型文件路径
+        # Model file paths
         self.yolo_model_path = self.checkpoints_dir / "yolov8n.pt"
         self.yolo_engine_path = self.engines_dir / "yolov8n.engine"
 
     def convert_models_if_needed(self):
-        """如果需要，转换模型为TensorRT格式"""
+        """Convert the model to TensorRT format when needed"""
         
-        # 转换YOLO模型（最简单的方式）
+        # Convert the YOLO model using the simplest path
         if not osp.exists(self.yolo_engine_path):
-            print("正在转换YOLO模型到TensorRT...")
+            print("Converting the YOLO model to TensorRT...")
             self.convert_yolo()
         
-        # 对于ViTPose，我们先用ONNX Runtime作为备选方案
-        print("ViTPose将使用ONNX Runtime进行推理（更容易配置）")
+        # For ViTPose, start with ONNX Runtime as a fallback option
+        print("ViTPose will use ONNX Runtime for inference because it is easier to configure")
     
     def convert_yolo(self):
-        """转换YOLO模型"""
-        print("正在转换YOLO模型到TensorRT...")
+        """Convert the YOLO model"""
+        print("Converting the YOLO model to TensorRT...")
         from ultralytics import YOLO
         
         model = YOLO(str(self.yolo_model_path))
-        # 直接导出到引擎目录
+        # Export directly into the engine directory
         success = model.export(
             format="engine",
             device=0,
@@ -72,43 +72,43 @@ class SimpleTensorRTDetection:
             workspace=4,
             verbose=False,
             save=True,
-            saved_model=str(self.yolo_engine_path)  # 直接保存到引擎目录
+            saved_model=str(self.yolo_engine_path)  # save directly into the engine directory
         )
         
         if not self.yolo_engine_path.exists():
-            raise RuntimeError(f"在 {self.yolo_engine_path} 创建引擎失败")
-        print(f"YOLO TensorRT引擎已保存到: {self.yolo_engine_path}")
+            raise RuntimeError(f"at  {self.yolo_engine_path} failed to create the engine")
+        print(f"YOLO TensorRT engine saved to: {self.yolo_engine_path}")
 
     def load_trt_engine(self, engine_path):
-        """加载TensorRT引擎"""
+        """Load the TensorRT engine"""
         try:
             with open(engine_path, 'rb') as f:
                 engine_data = f.read()
             engine = self.runtime.deserialize_cuda_engine(engine_data)
             if engine is None:
-                raise RuntimeError(f"从 {engine_path} 反序列化引擎失败")
+                raise RuntimeError(f"from  {engine_path} failed to deserialize the engine")
             return engine
         except Exception as e:
-            print(f"加载引擎时出错 {engine_path}: {str(e)}")
+            print(f"Error while loading the engine {engine_path}: {str(e)}")
             return None
     
     def load_engines(self):
-        """加载推理引擎"""
-        print("加载YOLO TensorRT引擎...")
+        """Load the inference engine"""
+        print("Loading the YOLO TensorRT engine...")
         self.yolo_trt = self.load_trt_engine(self.yolo_engine_path)
         if self.yolo_trt is None:
             raise RuntimeError("Failed to load YOLO TensorRT engine")
         
         try:
             self.yolo_context = self.yolo_trt.create_execution_context()
-            print("YOLO TensorRT引擎加载成功")
+            print("YOLO TensorRT engine loaded successfully")
         except Exception as e:
             raise RuntimeError(f"Failed to create execution context: {str(e)}")
     
     def detect_objects(self, image):
-        """检测图像中的目标"""
+        """Detect objects in the image"""
         if self.use_pytorch_yolo:
-            # 使用PyTorch版本
+            # Use the PyTorch version
             results = self.yolo_model(image)
             detections = []
             
@@ -120,28 +120,28 @@ class SimpleTensorRTDetection:
                         conf = box.conf[0].cpu().numpy()
                         cls = int(box.cls[0].cpu().numpy())
                         
-                        if cls == 0 and conf > 0.5:  # 人体检测，置信度>0.5
+                        if cls == 0 and conf > 0.5:  # person detection with confidence > 0.5
                             detections.append([x1, y1, x2, y2, conf, cls])
             
             return detections
         else:
-            # 使用TensorRT版本
+            # Use the TensorRT version
             return self.detect_with_tensorrt(image)
     
     def detect_with_tensorrt(self, image):
-        """使用TensorRT进行检测"""
-        # 这里需要实现TensorRT推理逻辑
-        # 为简化示例，暂时返回空列表
-        print("TensorRT推理（待实现完整版本）")
+        """Run detection with TensorRT"""
+        # TensorRT inference logic still needs to be implemented here
+        # Return an empty list for now to keep the example simple
+        print("TensorRT inference (full implementation pending)")
         return []
     
     def estimate_pose(self, image, bbox):
-        """姿态估计（简化版本）"""
-        # 这里可以集成你的ViTPose模型
-        # 为了演示，返回一些虚拟关键点
+        """Pose estimation (simplified version)"""
+        # Integrate your ViTPose model here
+        # Return a few dummy keypoints for demonstration
         x1, y1, x2, y2 = map(int, bbox[:4])
         
-        # 17个COCO关键点的虚拟坐标
+        # dummy coordinates for 17 COCO keypoints
         keypoints = []
         for i in range(17):
             x = x1 + (x2 - x1) * np.random.random()
@@ -152,14 +152,14 @@ class SimpleTensorRTDetection:
         return np.array(keypoints)
     
     def process_image(self, image_path):
-        """处理单张图像"""
-        # 读取图像
+        """Process a single image"""
+        # Read the image
         image = cv2.imread(image_path)
         if image is None:
-            print(f"无法读取图像: {image_path}")
+            print(f"Unable to read the image: {image_path}")
             return None
         
-        # 检测人体
+        # Detect people
         detections = self.detect_objects(image)
         
         results = []
@@ -167,7 +167,7 @@ class SimpleTensorRTDetection:
             bbox = detection[:4]
             confidence = detection[4]
             
-            # 姿态估计
+            # Pose estimation
             keypoints = self.estimate_pose(image, bbox)
             
             results.append({
@@ -179,18 +179,18 @@ class SimpleTensorRTDetection:
         return results
     
     def visualize_results(self, image_path, results):
-        """可视化结果"""
+        """Visualize the results"""
         image = cv2.imread(image_path)
         
         for result in results:
             bbox = result['bbox']
             keypoints = result['keypoints']
             
-            # 绘制边界框
+            # Draw bounding boxes
             x1, y1, x2, y2 = map(int, bbox)
             cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
             
-            # 绘制关键点
+            # Draw keypoints
             for kpt in keypoints:
                 x, y, conf = kpt
                 if conf > 0.5:
@@ -198,67 +198,67 @@ class SimpleTensorRTDetection:
         
         return image
 
-# 使用示例
+# Usage example
 def main():
-    """主函数示例"""
+    """Main-function example"""
     
-    # 初始化模型
-    print("初始化TensorRT检测模型...")
+    # Initialize the model
+    print("Initialize the TensorRT detection model...")
     detector = SimpleTensorRTDetection()
     
-    # 处理图像
-    image_path = 'test_image.jpg'  # 替换为你的图像路径
+    # Process the image
+    image_path = 'test_image.jpg'  # replace with your image path
     
     if osp.exists(image_path):
-        print(f"处理图像: {image_path}")
+        print(f"Process the image: {image_path}")
         
-        # 检测和姿态估计
+        # Detection and pose estimation
         results = detector.process_image(image_path)
         
         if results:
-            print(f"检测到 {len(results)} 个人体")
+            print(f"Detected  {len(results)}  people")
             
-            # 可视化结果
+            # Visualize the results
             vis_image = detector.visualize_results(image_path, results)
             cv2.imwrite('result.jpg', vis_image)
-            print("结果已保存到 result.jpg")
+            print("Results saved to result.jpg")
         else:
-            print("未检测到人体")
+            print("No people were detected")
     else:
-        print(f"图像文件不存在: {image_path}")
-        print("请准备一张测试图像")
+        print(f"Image file not found: {image_path}")
+        print("Please prepare a test image")
 
 if __name__ == "__main__":
     main()
 
-# 性能测试
+# Performance test
 def benchmark():
-    """性能测试"""
+    """Performance test"""
     import time
     
     detector = SimpleTensorRTDetection()
     
-    # 创建测试图像
+    # Create a test image
     test_image = np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8)
     
-    # 预热
+    # Warm-up
     for _ in range(5):
         _ = detector.detect_objects(test_image)
     
-    # 性能测试
+    # Performance test
     n_tests = 50
     start_time = time.time()
     
     for i in range(n_tests):
         detections = detector.detect_objects(test_image)
         if i % 10 == 0:
-            print(f"测试进度: {i+1}/{n_tests}")
+            print(f"Test progress: {i+1}/{n_tests}")
     
     total_time = time.time() - start_time
     avg_time = total_time / n_tests
     fps = 1.0 / avg_time
     
-    print(f"\n性能测试结果:")
-    print(f"总时间: {total_time:.2f}秒")
-    print(f"平均推理时间: {avg_time*1000:.1f}毫秒")
-    print(f"平均FPS: {fps:.1f}")
+    print(f"\nPerformance test results:")
+    print(f"Total time: {total_time:.2f}s")
+    print(f"Average inference time: {avg_time*1000:.1f}ms")
+    print(f"Average FPS: {fps:.1f}")

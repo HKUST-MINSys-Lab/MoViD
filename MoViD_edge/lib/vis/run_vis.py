@@ -246,18 +246,18 @@ def run_vis_on_demo(cfg, video, results, output_pth, smpl, vis_global=True):
     writer.close()
 def render_skeleton(joints, img, line_thickness=2, point_radius=4):
     """
-    在图像上渲染骨骼可视化，使用提供的关节位置。
+    Render skeleton visualization on the image using the provided joint positions.
     
     Args:
-        joints: 关节位置张量，形状为 (num_joints, 3)
-        img: 要渲染骨骼的图像
-        line_thickness: 连接关节的线条粗细
-        point_radius: 表示关节的点的半径
+        joints: joint position tensor with shape (num_joints, 3)
+        img: image to render the skeleton onto
+        line_thickness: line thickness for connecting joints
+        point_radius: radius of the points used to draw joints
     
     Returns:
-        带有渲染骨骼的图像
+        image with the rendered skeleton
     """
-    # 确保关节数据在CPU上以便OpenCV操作
+    # Ensure the joint data is on CPU for OpenCV operations
     joints_np = joints.detach().cpu().numpy()
     
     img_h, img_w = img.shape[:2]
@@ -267,45 +267,45 @@ def render_skeleton(joints, img, line_thickness=2, point_radius=4):
     joints_2d = joints_2d.astype(np.int32)
     
     
-    # 使用提供的骨骼连接
+    # Use the provided bone connections
     connections = [    
-                (0, 1), (0, 2), (1, 3), (2,4),  # 头部
-                (6, 8), (8, 10),  # 左臂
-                (7, 9), (5, 7),   # 右臂
-                (5, 6), (5, 11), (6, 12),  # 躯干
-                (11, 13), (13, 15),  # 左腿
-                (12, 14), (14, 16),  # 右腿
-                (11, 12),  # 骨盆
+                (0, 1), (0, 2), (1, 3), (2,4),  # head
+                (6, 8), (8, 10),  # left arm
+                (7, 9), (5, 7),   # right arm
+                (5, 6), (5, 11), (6, 12),  # torso
+                (11, 13), (13, 15),  # left leg
+                (12, 14), (14, 16),  # right leg
+                (11, 12),  # pelvis
     ]
 
     
-    # 绘制连接
+    # Draw connections
     img_copy = img.copy()
     for i, (j1, j2) in enumerate(connections):
-        # 检查关节是否在图像边界内和索引范围内
+        # Check whether the joints are inside image bounds and within the valid index range
         if (j1 < len(joints_2d) and j2 < len(joints_2d) and
             0 <= joints_2d[j1, 0] < img_w and 0 <= joints_2d[j1, 1] < img_h and
             0 <= joints_2d[j2, 0] < img_w and 0 <= joints_2d[j2, 1] < img_h):
             
                 
-            # 绘制线条
+            # Draw lines
             cv2.line(img_copy, 
                     tuple(joints_2d[j1]), 
                     tuple(joints_2d[j2]), 
                     (51, 255, 51), 
                     thickness=line_thickness)
     
-    # 绘制关节点
+    # Draw joint points
     for i, joint in enumerate(joints_2d):
-        # 检查关节是否在图像边界内
+        # Check whether the joints are inside image bounds
         if 0 <= joint[0] < img_w and 0 <= joint[1] < img_h:
             cv2.circle(img_copy, 
                       tuple(joint), 
                       radius=point_radius, 
-                      color=(255, 255, 255),  # 关节点使用白色
-                      thickness=-1)  # 填充圆形
+                      color=(255, 255, 255),  # use white for joint points
+                      thickness=-1)  # filled circle
         
-            # 可选：添加关节编号标签，便于调试
+            # Optional: add joint index labels for debugging
             # cv2.putText(img_copy, str(i), (joint[0]+5, joint[1]+5), 
             #            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
     
@@ -318,26 +318,26 @@ import torch
 
 def plot_3d_joints(joints3d, bones=None, save_path='3d_skeleton.png'):
     """
-    可视化3D关节位置，并标注关节编号，同时保存为图片。
+    Visualize 3D joint positions, annotate joint indices, and save the image.
     Args:
-        joints3d (torch.Tensor or np.ndarray): 3D关节位置，形状 (N, 3)
-        bones (list of tuple): 骨骼连接，用于连线，可选
-        save_path (str): 图片保存路径
+        joints3d (torch.Tensor or np.ndarray): 3D joint positions, shape (N, 3)
+        bones (list of tuple): bone connections used for drawing lines, optional
+        save_path (str): path to save the image
     """
     joints3d = joints3d.cpu().numpy() if isinstance(joints3d, torch.Tensor) else joints3d
     
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     
-    # 绘制关节点
+    # Draw joint points
     ax.scatter(joints3d[:, 0], joints3d[:, 1], joints3d[:, 2], c='b', marker='o')
 
-    # 标注关节编号
+    # Annotate joint indices
     for i, (x, y, z) in enumerate(joints3d):
         if i >=17:
             ax.text(x, y, z, str(i), color='red', fontsize=8)
 
-    # 绘制骨骼连接
+    # Draw bone connections
     if bones:
         for (j1, j2) in bones:
             x_vals = [joints3d[j1, 0], joints3d[j2, 0]]
@@ -350,9 +350,9 @@ def plot_3d_joints(joints3d, bones=None, save_path='3d_skeleton.png'):
     ax.set_zlabel('Z')
     plt.title('3D Joints Visualization')
     
-    # 保存图片
+    # Save the image
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"3D关节图已保存至 {save_path}")
+    print(f"3D joint plot saved to {save_path}")
     plt.show()
 
 

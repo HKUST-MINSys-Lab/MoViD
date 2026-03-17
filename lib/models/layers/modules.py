@@ -26,25 +26,25 @@ class DynamicProjection(nn.Module):
     def forward(self, motion, view):
         """
         Args:
-            motion: [B,T,d] 输入运动特征
-            view: [B,T,d_view] 视角特征
+            motion: [B, T, d] input motion features
+            view: [B, T, d_view] view features
         """
         B, T, d = motion.shape
         
-        # 1. 生成基向量 (保持batch和序列维度)
+        # 1. Generate basis vectors while preserving batch and sequence dimensions
         bases = self.base_gen(view).view(B, T, self.K, d)  # [B,T,K,d]
         
-        # 2. 初始化投影结果
+        # 2. Initialize the projection result
         proj = motion.clone()  # [B,T,d]
         
-        # 3. 改进的Gram-Schmidt正交化
+        # 3. Improved Gram-Schmidt orthogonalization
         for k in range(self.K):
             v = bases[:,:,k,:]  # [B,T,d]
             
-            # 计算投影系数 (保持维度对齐)
+            # Compute projection coefficients while keeping dimensions aligned
             coef = (proj * v).sum(dim=-1, keepdim=True)  # [B,T,1]
             
-            # 正交化投影
+            # Orthogonalize the projection
             proj = proj - coef * v / (v.norm(dim=-1, keepdim=True)**2 + 1e-6)
         
         return proj  # [B,T,d]
@@ -110,49 +110,49 @@ class ImprovedDynamicProjection(nn.Module):
         return proj  # [B,T,d]
 
 class EnhancedViewEncoder(nn.Module):
-    """多尺度生物力学特征编码器"""
+    """Multi-scale biomechanical feature encoder"""
     def __init__(self, joint_dim=4, d_embed=512):
         super().__init__()
-        # 生物力学特征提取
+        # Biomechanical feature extraction
         self.bio_feat = nn.Sequential(
-            nn.Linear(18, 128),  # 髋/肩空间关系
+            nn.Linear(18, 128),  # hip/shoulder spatial relationships
             nn.LeakyReLU(0.1),
             nn.Linear(128, 256))
         
-        # 多尺度时间卷积
+        # Multi-scale temporal convolution
         self.tconvs = nn.ModuleList([
             nn.Conv1d(256, 256, kernel_size=3, dilation=2**i, padding=2**i) 
             for i in range(3)
         ])
-        # 注意力聚合
+        # Attention aggregation
         self.attn = nn.MultiheadAttention(embed_dim=256, num_heads=4, batch_first=True)
         self.final_fc = nn.Linear(256, d_embed)
 
     def forward(self, kp3d):
-        """输入形状：[B, T, J, 3]"""
-        # 生物力学特征
-        hips = kp3d[:, :, [11,12]]  # 髋关节
-        shoulders = kp3d[:, :, [5,6]]  # 肩关节
+        """Input shape: [B, T, J, 3]"""
+        # Biomechanical features
+        hips = kp3d[:, :, [11,12]]  # hip joints
+        shoulders = kp3d[:, :, [5,6]]  # shoulder joints
         
-        # 计算空间关系特征
+        # Compute spatial relationship features
         spatial_feat = torch.cat([
-            hips.mean(2) - shoulders.mean(2),        # 躯干向量
-            hips.std(2),                            # 髋部稳定性
-            hips[:,:,0]-hips[:,:,1],        # 髋部活动范围
-            shoulders.max(2)[0] - shoulders.min(2)[0],  # 肩部活动范围
-            #shoulders[:,:,0]-shoulders[:,:,1],  # 肩部活动范围
-            kp3d[:, :, [0]].expand(-1,-1,2,-1).flatten(2)  # 根节点位置
+            hips.mean(2) - shoulders.mean(2),        # torso vector
+            hips.std(2),                            # hip stability
+            hips[:,:,0]-hips[:,:,1],        # hip range of motion
+            shoulders.max(2)[0] - shoulders.min(2)[0],  # shoulder range of motion
+            #shoulders[:,:,0]-shoulders[:,:,1],  # shoulder range of motion
+            kp3d[:, :, [0]].expand(-1,-1,2,-1).flatten(2)  # root joint position
         ], dim=-1)  # [B, T, 16]
         
         bio_feat = self.bio_feat(spatial_feat)  # [B, T, 256]
         # return self.final_fc(bio_feat)  # [B, T, d_embed]
-        # 多尺度时间卷积
+        # Multi-scale temporal convolution
         t_feat = bio_feat.transpose(1,2)  # [B, 256, T]
         for conv in self.tconvs:
             t_feat = F.gelu(conv(t_feat))
         t_feat = t_feat.transpose(1,2)  # [B, T, 256]
         
-        # 时序注意力聚合
+        # Temporal attention aggregation
         attn_out, _ = self.attn(t_feat, t_feat, t_feat)  # [B, T, 256]
         pooled = F.adaptive_avg_pool1d(attn_out.transpose(1,2), 1).squeeze(-1)
 
@@ -160,14 +160,14 @@ class EnhancedViewEncoder(nn.Module):
 
 
 class MultiScaleMotionEncoder(nn.Module):
-    """多尺度运动编码器"""
+    """Multi-scale motion encoder"""
     def __init__(self, in_dim, d_embed=512):
         super().__init__()
         self.temporal_branches = nn.ModuleList([
             nn.Sequential(
                 nn.Conv1d(in_dim, 256, kernel_size=5, stride=1, padding=2),
                 nn.GELU(),
-                nn.BatchNorm1d(256)  # 用 BatchNorm1d 代替 LayerNorm
+                nn.BatchNorm1d(256)  # use BatchNorm1d instead of LayerNorm
             ) for _ in range(3)
         ])
 
@@ -176,27 +176,27 @@ class MultiScaleMotionEncoder(nn.Module):
         self.fusion = nn.Linear(256*3, d_embed)
         
     def forward(self, x):
-        """输入形状 [B, T, D]"""
+        """Input shape [B, T, D]"""
         B, T, D = x.shape
         x = x.transpose(1,2)  # [B, D, T]
         print("Input to branches:", x.shape)
         
-        # 多尺度特征提取
+        # Multi-scale feature extraction
         features = []
         for branch in self.temporal_branches:
             feat = branch(x)  # [B, 256, T//2]
             print("After conv:", feat.shape)
             feat = feat.transpose(1,2)  # [B, T//2, 256]
             
-            # 空间注意力
+            # Spatial attention
             attn_feat, _ = self.spatial_attn(feat, feat, feat)
             features.append(F.adaptive_max_pool1d(attn_feat.transpose(1,2), 1).squeeze(-1))
         
-        # 多尺度特征融合
+        # Multi-scale feature fusion
         fused = torch.cat(features, dim=-1)
         return self.fusion(fused)  # [B, d_embed]
 class ViewEncoder(nn.Module):
-    """视角特征编码器"""
+    """View feature encoder"""
     def __init__(self, in_dim=3, d_embed=512):
         super().__init__()
         self.mlp = nn.Sequential(
@@ -210,7 +210,7 @@ class ViewEncoder(nn.Module):
         return self.mlp(x)
 
 class CrossAttentionFusion(nn.Module):
-    """交叉注意力融合模块（带维度投影）"""
+    """Cross-attention fusion module (with dimensional projection)"""
     def __init__(self, d_model=512, n_head=8):
         super().__init__()
 
@@ -219,12 +219,12 @@ class CrossAttentionFusion(nn.Module):
 
         
     def forward(self, motion_feat, view_feat):
-        # 投影对齐维度
+        # Project to aligned dimensions
         
-        # 扩展视角特征
+        # Expand view features
         #view_feat = view_feat.unsqueeze(1).expand(-1, motion_feat.size(1), -1)
         
-        # 注意力计算
+        # Attention computation
         attn_output, _ = self.cross_attn(
             query=motion_feat,
             key=view_feat,
@@ -283,20 +283,20 @@ class GatedFusion(nn.Module):
     
 class MinimalViewEncoder(nn.Module):
     """
-    极简视角编码器 - 只提取身体朝向的基本几何特征
+    Minimal view encoder - extracts only basic geometric cues for body orientation
     
-    特征包括：
-    1. hip_left - hip_right (髋部宽度向量, 3维)
-    2. shoulder_left - shoulder_right (肩部宽度向量, 3维)
-    3. 深度信息 (髋部和肩部的z坐标, 4维)
+    Features include:
+    1. hip_left - hip_right (hip-width vector, 3D)
+    2. shoulder_left - shoulder_right (shoulder-width vector, 3D)
+    3. Depth values (hip and shoulder z coordinates, 4D)
     
-    总共: 10维基本特征 → 512维嵌入
+    Total: 10 basic features -> 512D embedding
     """
     def __init__(self, joint_dim=3, d_embed=512):
         super().__init__()
         
-        # 极简特征提取：只用简单的MLP
-        # 输入: 10维 (2个3D向量 + 4个深度值)
+        # Minimal feature extraction: use only a lightweight MLP
+        # Input: 10D (two 3D vectors + four depth values)
         self.encoder = nn.Sequential(
             nn.Linear(10, 64),
             nn.LayerNorm(64),
@@ -318,10 +318,10 @@ class MinimalViewEncoder(nn.Module):
         
     def forward(self, kp3d):
         """
-        输入: [B, T, J, 3] - 3D关节位置
-        输出: [B, T, d_embed] - 视角特征
+        Input: [B, T, J, 3] - 3D joint positions
+        Output: [B, T, d_embed] - view features
         
-        关节索引（SMPL约定）:
+        Joint indices (SMPL convention):
         - 11: left_hip
         - 12: right_hip  
         - 5: left_shoulder
@@ -329,35 +329,35 @@ class MinimalViewEncoder(nn.Module):
         """
         B, T = kp3d.shape[:2]
         
-        # 提取关键关节
+        # Extract key joints
         left_hip = kp3d[:, :, 11]        # [B, T, 3]
         right_hip = kp3d[:, :, 12]       # [B, T, 3]
         left_shoulder = kp3d[:, :, 5]    # [B, T, 3]
         right_shoulder = kp3d[:, :, 6]   # [B, T, 3]
         
-        # 1. 髋部宽度向量 (身体朝向的主要指示)
+        # 1. Hip-width vector (primary cue for body orientation)
         hip_vector = left_hip - right_hip  # [B, T, 3]
         
-        # 2. 肩部宽度向量 (身体朝向的辅助指示)
+        # 2. Shoulder-width vector (secondary cue for body orientation)
         shoulder_vector = left_shoulder - right_shoulder  # [B, T, 3]
         
-        # 3. 深度信息 (相对于相机的距离)
-        left_hip_depth = left_hip[:, :, 2:3]      # [B, T, 1] - z坐标
+        # 3. Depth values (distance relative to the camera)
+        left_hip_depth = left_hip[:, :, 2:3]      # [B, T, 1] - z coordinate
         right_hip_depth = right_hip[:, :, 2:3]    # [B, T, 1]
         left_shoulder_depth = left_shoulder[:, :, 2:3]   # [B, T, 1]
         right_shoulder_depth = right_shoulder[:, :, 2:3] # [B, T, 1]
         
-        # 组合所有特征: [B, T, 10]
+        # Concatenate all features: [B, T, 10]
         view_features = torch.cat([
-            hip_vector,              # 3维
-            shoulder_vector,         # 3维
-            left_hip_depth,          # 1维
-            right_hip_depth,         # 1维
-            left_shoulder_depth,     # 1维
-            right_shoulder_depth,    # 1维
+            hip_vector,              # 3D
+            shoulder_vector,         # 3D
+            left_hip_depth,          # 1D
+            right_hip_depth,         # 1D
+            left_shoulder_depth,     # 1D
+            right_shoulder_depth,    # 1D
         ], dim=-1)
         
-        # 通过简单MLP编码
+        # Encode with a simple MLP
         output = self.encoder(view_features)  # [B, T, d_embed]
         
         return output
@@ -859,16 +859,16 @@ class MotionDecoder(nn.Module):
     def __init__(self,
                  d_embed,
                  rnn_type,
-                 n_layers):  # 新增参数：是否预测root
+                 n_layers):  # new parameter: whether to predict the root
         super().__init__()
 
 
-        # 解耦版本：只预测body pose (23关节)
+        # Decoupled version: predict only body pose (23 joints)
         self.n_pose = 23
         pose_dim = self.n_pose * 6  # 138
 
         # SMPL pose initialization
-        body_joints_indices = _C.BMODEL.MAIN_JOINTS[1:]  # 排除root
+        body_joints_indices = _C.BMODEL.MAIN_JOINTS[1:]  # exclude the root
         self.neural_init = NeuralInitialization(
             len(body_joints_indices) * 6, d_embed, rnn_type, n_layers
         )
@@ -883,11 +883,11 @@ class MotionDecoder(nn.Module):
         b, f = x.shape[:2]
 
 
-        # 解耦版本：只用body joints初始化
-        # init shape: [B, 1, 24, 6], 取body joints (索引1-23)
+        # Decoupled version: initialize with body joints only
+        # init shape: [B, 1, 24, 6], using body joints only (indices 1-23)
         init_joints = [j-1 for j in _C.BMODEL.MAIN_JOINTS if j > 0]
         h0 = self.neural_init(init[:, :, 1:][..., init_joints, :].reshape(b, 1, -1))
-        init_pose = init[:, :, 1:].reshape(b, 1, -1)  # 只用body部分
+        init_pose = init[:, :, 1:].reshape(b, 1, -1)  # use only the body part
 
         # Recursive prediction
         pred_pose_list = [init_pose]
@@ -952,48 +952,48 @@ class MotionDecoder(nn.Module):
 
 
 class ViewDecoder(nn.Module):
-    """解码view-dependent特征: global_orient和camera参数"""
+    """Decode view-dependent features: global_orient and camera parameters"""
     def __init__(self,
                  d_embed,
                  rnn_type,
                  n_layers):
         super().__init__()
         
-        # View decoder只预测global_orient(6维)和cam(3维)
+        # The view decoder predicts only global_orient (6D) and cam (3D)
         
-        # Global orientation initialization - 只用root joint (索引0)
-        # 如果MAIN_JOINTS包含0，则用它；否则直接用6维
+        # Global orientation initialization - use only the root joint (index 0)
+        # If MAIN_JOINTS includes 0, use it; otherwise initialize directly with 6D
         if 0 in _C.BMODEL.MAIN_JOINTS:
-            init_joints = [0]  # 只用root joint
+            init_joints = [0]  # use only the root joint
             self.neural_init = NeuralInitialization(
                 len(init_joints) * 6, d_embed, rnn_type, n_layers
             )
         else:
-            # 直接用6维global_orient初始化
+            # Initialize global_orient directly with 6D
             self.neural_init = NeuralInitialization(
                 6, d_embed, rnn_type, n_layers
             )
         
-        # Regressor: 输出[global_orient(6), cam(3)]
+        # Regressor: outputs [global_orient (6), cam (3)]
         self.regressor = Regressor(
             d_embed, d_embed, 
             [6, 3],  # [global_orient, cam]
-            6,       # 初始化维度
+            6,       # initialization dimension
             rnn_type, n_layers
         )
         
     def forward(self, x, init):
         """
         Args:
-            x: [B, T, d_embed] - view context特征
-            init: [B, 1, 24, 6] - 初始SMPL pose
+            x: [B, T, d_embed] - view context features
+            init: [B, 1, 24, 6] - initial SMPL pose
         Returns:
             pred_global_orient: [B, T, 6]
             pred_cam: [B, T, 3]
         """
         b, f = x.shape[:2]
         
-        # 只用global_orient (root joint, 索引0)
+        # Use only global_orient (root joint, index 0)
         init_global = init[:, :, 0]  # [B, 1, 6]
         h0 = self.neural_init(init_global.reshape(b, 1, -1))
         
@@ -1106,13 +1106,13 @@ class DenoiserNetwork(nn.Module):
             nn.SiLU(),
             nn.Linear(time_dim, time_dim))
         
-        # 合并运动特征和平滑关键点
+        # Combine motion features and smoothed keypoints
         self.cond_proj = nn.Sequential(
             nn.Linear(cond_dim + smooth_dim, time_dim),
             nn.LayerNorm(time_dim))
         
         self.main = nn.Sequential(
-            nn.Linear(input_dim + time_dim*2, 512),  # 时间嵌入和条件各占time_dim
+            nn.Linear(input_dim + time_dim*2, 512),  # time embedding and condition each use time_dim
             nn.GroupNorm(8, 512),
             nn.SiLU(),
             nn.Linear(512, 512),
@@ -1123,7 +1123,7 @@ class DenoiserNetwork(nn.Module):
     def forward(self, x, t_normalized, condition_with_smooth):
         """ 
         x: [B*T, J*3]
-        t_normalized: [B*T,] 归一化到0~1
+        t_normalized: [B*T,] normalized to 0~1
         condition_with_smooth: [B*T, cond_dim + smooth_dim]
         """
         t_embed = self.time_embed(t_normalized.unsqueeze(-1))
@@ -1174,21 +1174,21 @@ class DiffusionWrapper(nn.Module):
         )
     
         
-        # 运动学约束参数
-        self.bones = bones  # 骨骼连接对列表 [(j1, j2), ...]
-        self.joint_triples = joint_triples  # 关节角度三元组 [(j0, j1, j2), ...]
-        self.angle_limits = angle_limits  # 角度限制字典 {(j0,j1,j2): (min,max), ...}
-        self.collision_pairs = collision_pairs  # 碰撞检测对列表 [(j1, j2), ...]
+        # Kinematic constraint parameters
+        self.bones = bones  # list of bone connection pairs [(j1, j2), ...]
+        self.joint_triples = joint_triples  # joint-angle triplets [(j0, j1, j2), ...]
+        self.angle_limits = angle_limits  # angle-limit dictionary {(j0,j1,j2): (min,max), ...}
+        self.collision_pairs = collision_pairs  # list of collision-check pairs [(j1, j2), ...]
         self.collision_threshold = collision_threshold
         
-        # 约束权重系数
+        # constraint weights
         self.lambda_accel = lambda_accel
         self.lambda_bone = lambda_bone
         self.lambda_angle = lambda_angle
         self.lambda_collision = lambda_collision
         
     def compute_bone_lengths(self, x_start):
-        """计算骨骼长度"""
+        """Compute bone lengths"""
         B, T, J, _ = x_start.shape
         bone_lengths = []
         for j1, j2 in self.bones:
@@ -1196,34 +1196,34 @@ class DiffusionWrapper(nn.Module):
         return torch.stack(bone_lengths, dim=-1)
 
     def acceleration_smoothness_loss(self, x_start):
-        """加速度平滑性损失（二阶差分约束）"""
+        """Acceleration smoothness loss (second-order difference constraint)"""
         B, T, J, _ = x_start.shape
         if T < 3:
             return torch.tensor(0.0, device=x_start.device)
         
-        # 计算加速度：x(t+1) - 2x(t) + x(t-1)
+        # Compute acceleration: x(t+1) - 2x(t) + x(t-1)
         accel = x_start[:, 2:] - 2 * x_start[:, 1:-1] + x_start[:, :-2]
         return torch.mean(accel ** 2)
 
     def bone_length_constraint_loss(self, x_start, bone_target_lengths):
-        """骨骼长度约束损失"""
+        """Bone-length constraint loss"""
 
         total_loss = 0.0
         for idx, (j1, j2) in enumerate(self.bones):
-            # 计算当前骨骼长度
+            # Compute the current bone length
             current_lengths = torch.norm(x_start[:, :, j1] - x_start[:, :, j2], dim=-1)
             
-            # 获取预计算的骨骼目标长度
+            # Fetch the precomputed target bone lengths
             target_length = bone_target_lengths[:,:,idx]
             
-            # 计算长度约束损失
+            # Compute the length-constraint loss
             loss = F.mse_loss(current_lengths, target_length)
             total_loss += loss
             
         return total_loss / len(self.bones)
 
     def joint_angle_constraint_loss(self, x_start):
-        """关节角度约束损失"""
+        """Joint-angle constraint loss"""
         if self.joint_triples is None or self.angle_limits is None:
             return torch.tensor(0.0, device=x_start.device)
         
@@ -1232,23 +1232,23 @@ class DiffusionWrapper(nn.Module):
             j0, j1, j2 = triple
             min_angle, max_angle = self.angle_limits[triple]
             
-            # 获取关节坐标
+            # Get joint coordinates
             p0 = x_start[:, :, j0]  # [B, T, 3]
             p1 = x_start[:, :, j1]
             p2 = x_start[:, :, j2]
             
-            # 计算向量
-            v1 = p0 - p1  # 父关节到当前关节向量
-            v2 = p2 - p1  # 当前关节到子关节向量
+            # Compute vectors
+            v1 = p0 - p1  # vector from the parent joint to the current joint
+            v2 = p2 - p1  # vector from the current joint to the child joint
             
-            # 计算夹角余弦值
+            # Compute the cosine of the angle
             cos_theta = torch.sum(v1 * v2, dim=-1) / (
                 torch.norm(v1, dim=-1) * torch.norm(v2, dim=-1) + 1e-6)
             
-            # 转换为角度（弧度）
+            # Convert to an angle in radians
             theta = torch.acos(torch.clamp(cos_theta, -1.0, 1.0))
             
-            # 计算超出限制的惩罚项
+            # Compute penalty terms for violating limits
             lower_violation = torch.relu(min_angle - theta)
             upper_violation = torch.relu(theta - max_angle)
             total_loss += (lower_violation + upper_violation).mean()
@@ -1256,16 +1256,16 @@ class DiffusionWrapper(nn.Module):
         return total_loss / len(self.joint_triples)
 
     def collision_detection_loss(self, x_start):
-        """关节点碰撞检测损失"""
+        """Joint-collision loss"""
         if self.collision_pairs is None:
             return torch.tensor(0.0, device=x_start.device)
         
         total_loss = 0.0
         for j1, j2 in self.collision_pairs:
-            # 计算关节点间距离
+            # Compute pairwise joint distances
             dist = torch.norm(x_start[:, :, j1] - x_start[:, :, j2], dim=-1)
             
-            # 对小于阈值的距离施加惩罚
+            # Penalize distances below the threshold
             violation = torch.relu(self.collision_threshold - dist)
             total_loss += violation.mean()
             
@@ -1357,14 +1357,14 @@ class DiffusionWrapper(nn.Module):
         return self.p_sample_loop(model, shape=(batch_size, channels, image_size, image_size))
 
     def p_losses(self, x_start, condition_with_smooth, conf):
-        """整合所有损失的训练损失计算"""
+        """Training loss computation that combines all terms"""
         B, T, J, _ = x_start.shape
         x_flat = x_start.reshape(B*T, -1)
         bone_target_lengths = self.compute_bone_lengths(x_start)
         cond_flat = condition_with_smooth.reshape(B*T, -1)
         conf_flat = conf.reshape(B*T, J)
         
-        # 基础扩散损失
+        # Base diffusion loss
         t = torch.randint(0, self.timesteps, (B*T,), device=x_start.device)
         t_normalized = t.float() / (self.timesteps - 1)
         noise = torch.randn_like(x_flat)
@@ -1384,19 +1384,19 @@ class DiffusionWrapper(nn.Module):
         total_loss = weighted_loss
 
 
-        # 加速度平滑性约束
+        # Acceleration smoothness constraint
         accel_loss = self.acceleration_smoothness_loss(denoised_x)
         total_loss += self.lambda_accel * accel_loss
         
-        # 骨骼长度约束
+        # Bone-length constraint
         bone_loss = self.bone_length_constraint_loss(denoised_x, bone_target_lengths)
         total_loss += self.lambda_bone * bone_loss
         
-        # 关节角度约束
+        # Joint-angle constraint
         angle_loss = self.joint_angle_constraint_loss(denoised_x)
         total_loss += self.lambda_angle * angle_loss
         
-        # 碰撞检测约束
+        # Collision-detection constraint
         collision_loss = self.collision_detection_loss(denoised_x)
         total_loss += self.lambda_collision * collision_loss
         
@@ -1405,41 +1405,41 @@ class DiffusionWrapper(nn.Module):
     @torch.no_grad()
     def refine(self, init, condition_with_smooth, steps=50):
         """ 
-        init: [B, T, J, 3] 初始平滑关键点
-        condition_with_smooth: [B, T, cond_dim + smooth_dim] 合并后的条件
+        init: [B, T, J, 3] initial smoothed keypoints
+        condition_with_smooth: [B, T, cond_dim + smooth_dim] merged condition tensor
         """
         B, T, J, _ = init.shape
         device = init.device
         x = init.reshape(B*T, -1)
         cond_flat = condition_with_smooth.reshape(B*T, -1)
         
-        # 生成时间步索引（等间隔采样训练时的时间步）
+        # Generate timestep indices by evenly sampling the training timesteps
         step_indices = torch.linspace(0, self.timesteps-1, steps, dtype=torch.long)
         for t_idx in reversed(step_indices):
             t = torch.full((B*T,), t_idx.item(), device=device)
             
-            # 1. 预测噪声
+            # 1. Predict noise
             t_normalized = t.float() / (self.timesteps - 1)
             pred_noise = self.denoiser(x, t_normalized, cond_flat)
             
             
-            # 计算x0预测值
+            # Compute the predicted x0
             x_recon = self.predict_start_from_noise(x, t, pred_noise)
             
-            # 计算mu系数
+            # Compute the mu coefficients
             posterior_mean_coef1 = self._extract(self.posterior_mean_coef1, t, x.shape)
             posterior_mean_coef2 = self._extract(self.posterior_mean_coef2, t, x.shape)
             
-            # 计算mu = coef1 * x0 + coef2 * x_t
+            # Compute mu = coef1 * x0 + coef2 * x_t
             mu = posterior_mean_coef1 * x_recon + posterior_mean_coef2 * x
             
-            # 3. 计算方差并采样
+            # 3. Compute the variance and sample
             posterior_variance = self._extract(self.posterior_variance, t, x.shape)
             if t_idx > 0:
                 noise = torch.randn_like(x)
                 x = mu + torch.sqrt(posterior_variance) * noise
             else:
-                x = mu  # 最后一步不加噪声
+                x = mu  # Do not add noise on the final step
                 
         return x.reshape(B, T, J, 3)
 
@@ -1447,14 +1447,14 @@ class DiffusionWrapper(nn.Module):
     # @torch.no_grad()
     # def refine(self, init, condition_with_smooth, steps=50):
     #     """ 
-    #     init: [B, T, J, 3] 初始平滑关键点
-    #     condition_with_smooth: [B, T, cond_dim + smooth_dim] 合并后的条件
+    #     init: [B, T, J, 3] initial smoothed keypoints
+    #     condition_with_smooth: [B, T, cond_dim + smooth_dim] merged condition tensor
     #     """
     #     B, T, J, _ = init.shape
     #     x = init.reshape(B*T, -1)
     #     cond_flat = condition_with_smooth.reshape(B*T, -1)
         
-    #     # 生成时间步索引（等间隔采样训练时的时间步）
+    #     # Generate timestep indices by evenly sampling the training timesteps
     #     step_indices = torch.linspace(0, self.timesteps-1, steps, dtype=torch.long)
     #     for t_idx in reversed(step_indices):
     #         t = torch.full((B*T,), t_idx.item(), device=x.device)
@@ -1462,15 +1462,15 @@ class DiffusionWrapper(nn.Module):
             
     #         pred_noise = self.denoiser(x, t_normalized, cond_flat)
             
-    #         # 计算当前时间步参数
+    #         # Compute the parameters for the current timestep
     #         alpha_bar = self.alpha_bars[t_idx]
     #         alpha_bar_prev = self.alpha_bars[t_idx-1] if t_idx > 0 else 1.0
     #         beta_t = 1 - (alpha_bar / alpha_bar_prev)
             
-    #         # 计算mu
+    #         # Compute mu
     #         mu = (x - (beta_t / torch.sqrt(1 - alpha_bar)) * pred_noise) / torch.sqrt(alpha_bar / alpha_bar_prev)
             
-    #         # 添加噪声
+    #         # Add noise
     #         if t_idx > 0:
     #             sigma_t = torch.sqrt(beta_t)
     #             noise = torch.randn_like(x)

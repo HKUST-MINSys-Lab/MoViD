@@ -12,7 +12,7 @@ from lib.vis.renderer import Renderer, get_global_cameras
 
 def _render_ntu_skeleton(img, ntu_joints_2d, color=(0, 255, 255)):
     """
-    渲染 NTU RGB+D 25 关键点骨架到图像上
+    Render the NTU RGB+D 25-joint skeleton onto the image
 
     NTU RGB+D 25 joint order:
         0: Base of spine (pelvis/mid-hip)
@@ -42,40 +42,40 @@ def _render_ntu_skeleton(img, ntu_joints_2d, color=(0, 255, 255)):
         24: Right thumb
 
     Args:
-        img: BGR图像 (numpy array)
-        ntu_joints_2d: NTU 25关键点2D坐标 (25, 2)
-        color: 骨架线条颜色 (B, G, R)
+        img: BGR image (numpy array)
+        ntu_joints_2d: NTU 25-joint 2D coordinates (25, 2)
+        color: skeleton line color (B, G, R)
 
     Returns:
-        渲染后的BGR图像
+        rendered BGR image
     """
     h, w = img.shape[:2]
 
-    # NTU 骨架连接 (基于正确的 NTU 25 joint order)
+    # NTU skeleton connections (based on the correct NTU 25 joint order)
     ntu_skeleton = [
-        # 躯干 (spine): 0-1-20-2-3
+        # torso (spine): 0-1-20-2-3
         (0, 1), (1, 20), (20, 2), (2, 3),
-        # 左臂: 2-4-5-6-7, 7-21, 7-22 (从 neck 连接到 shoulder)
+        # left arm: 2-4-5-6-7, 7-21, 7-22 (connected from the neck to the shoulder)
         (2, 4), (4, 5), (5, 6), (6, 7), (7, 21), (7, 22),
-        # 右臂: 2-8-9-10-11, 11-23, 11-24 (从 neck 连接到 shoulder)
+        # right arm: 2-8-9-10-11, 11-23, 11-24 (connected from the neck to the shoulder)
         (2, 8), (8, 9), (9, 10), (10, 11), (11, 23), (11, 24),
-        # 左腿: 0-12-13-14-15
+        # left leg: 0-12-13-14-15
         (0, 12), (12, 13), (13, 14), (14, 15),
-        # 右腿: 0-16-17-18-19
+        # right leg: 0-16-17-18-19
         (0, 16), (16, 17), (17, 18), (18, 19),
     ]
 
-    # 绘制骨架连线
+    # Draw skeleton connections
     for start_idx, end_idx in ntu_skeleton:
         if start_idx < len(ntu_joints_2d) and end_idx < len(ntu_joints_2d):
             pt1 = ntu_joints_2d[start_idx]
             pt2 = ntu_joints_2d[end_idx]
 
-            # 确保 pt1 和 pt2 是标量
+            # Ensure pt1 and pt2 are scalars
             pt1 = pt1.flatten() if isinstance(pt1, np.ndarray) else pt1
             pt2 = pt2.flatten() if isinstance(pt2, np.ndarray) else pt2
 
-            # 检查点是否在有效范围内
+            # Check whether the points are in a valid range
             x1, y1 = float(pt1[0]), float(pt1[1])
             x2, y2 = float(pt2[0]), float(pt2[1])
 
@@ -84,24 +84,24 @@ def _render_ntu_skeleton(img, ntu_joints_2d, color=(0, 255, 255)):
                 cv2.line(img, (int(x1), int(y1)),
                         (int(x2), int(y2)), color, 2)
 
-    # 绘制关键点
+    # Draw keypoints
     for i, pt in enumerate(ntu_joints_2d):
-        # 确保 pt 是标量
+        # Ensure pt is a scalar
         pt = pt.flatten() if isinstance(pt, np.ndarray) else pt
         x, y = float(pt[0]), float(pt[1])
 
         if 0 <= x < w and 0 <= y < h:
-            # 不同部位使用不同颜色
-            if i in [0, 1, 2, 3, 20]:  # 躯干
-                pt_color = (0, 255, 0)  # 绿色
-            elif i in [4, 5, 6, 7, 21, 22]:  # 左臂
-                pt_color = (255, 0, 0)  # 蓝色
-            elif i in [8, 9, 10, 11, 23, 24]:  # 右臂
-                pt_color = (0, 0, 255)  # 红色
-            elif i in [12, 13, 14, 15]:  # 左腿
-                pt_color = (255, 255, 0)  # 青色
-            else:  # 右腿
-                pt_color = (255, 0, 255)  # 紫色
+            # Use different colors for different body parts
+            if i in [0, 1, 2, 3, 20]:  # torso
+                pt_color = (0, 255, 0)  # green
+            elif i in [4, 5, 6, 7, 21, 22]:  # left arm
+                pt_color = (255, 0, 0)  # blue
+            elif i in [8, 9, 10, 11, 23, 24]:  # right arm
+                pt_color = (0, 0, 255)  # red
+            elif i in [12, 13, 14, 15]:  # left leg
+                pt_color = (255, 255, 0)  # cyan
+            else:  # right leg
+                pt_color = (255, 0, 255)  # magenta
 
             cv2.circle(img, (int(x), int(y)), 4, pt_color, -1)
             cv2.circle(img, (int(x), int(y)), 5, (255, 255, 255), 1)
@@ -110,23 +110,23 @@ def _render_ntu_skeleton(img, ntu_joints_2d, color=(0, 255, 255)):
 
 def _project_ntu_joints_simple(ntu_joints_3d, width, height):
     """
-    简单的正交投影：将NTU 3D关键点投影到2D
-    这是一个fallback方法，使用简单的投影
+    Simple orthographic projection: project NTU 3D keypoints to 2D
+    This is a fallback method that uses simple projection
     """
-    # 简单的正交投影：只使用x和y坐标，z用于深度排序
-    # 将3D坐标归一化到图像尺寸
+    # Simple orthographic projection: use only x and y coordinates, with z reserved for depth ordering
+    # Normalize 3D coordinates to the image size
     joints_2d = ntu_joints_3d[:, :2].copy()  # (25, 2)
     
-    # 归一化到图像中心
-    # 假设3D坐标在合理范围内，进行简单的缩放和平移
+    # Normalize to the image center
+    # Assume the 3D coordinates are in a reasonable range and apply simple scaling and translation
     center = joints_2d.mean(axis=0)
     joints_2d = joints_2d - center
     
-    # 缩放以适应图像 - 增大缩放因子从0.3到1.0，使skeleton大小与mesh一致
+    # Scale to fit the image - increase the scaling factor from 0.3 to 1.0 so the skeleton size matches the mesh
     scale = min(width, height) / (joints_2d.max() - joints_2d.min() + 1e-6) * 1.0
     joints_2d = joints_2d * scale
     
-    # 平移到图像中心
+    # Translate to the image center
     joints_2d[:, 0] += width / 2
     joints_2d[:, 1] += height / 2
     
@@ -134,49 +134,49 @@ def _project_ntu_joints_simple(ntu_joints_3d, width, height):
 
 def _project_ntu_joints_to_2d(ntu_joints_3d, width, height, val, frame_i2, trans_cam=None, device='cuda:0'):
     """
-    使用相机参数将NTU 3D关键点投影到2D
+    Project NTU 3D keypoints to 2D using camera parameters
 
     Args:
-        ntu_joints_3d: NTU 25 3D关键点 (25, 3) - 已经在相机坐标系中（包含 trans_cam）
-        width: 图像宽度
-        height: 图像高度
-        val: 包含 trans_cam, joints2d, joints3d 等的结果字典
-        frame_i2: 当前帧在 results 中的索引
-        trans_cam: 相机平移参数 (可选，仅用于 fallback)
-        device: 计算设备
+        ntu_joints_3d: NTU 25-joint 3D keypoints (25, 3) - already in camera coordinates (including trans_cam)
+        width: image width
+        height: image height
+        val: result dictionary containing trans_cam, joints2d, joints3d, etc.
+        frame_i2: index of the current frame in results
+        trans_cam: camera translation parameters (optional, used only for the fallback path)
+        device: compute device
 
     Returns:
-        ntu_joints_2d: NTU 25 2D关键点 (25, 2)
+        ntu_joints_2d: NTU 25-joint 2D keypoints (25, 2)
     """
     try:
         from lib.models.smpl import full_perspective_projection
         from lib.utils.imutils import compute_cam_intrinsics
 
-        # 确保 device 是 torch.device 类型
+        # Ensure device is a torch.device
         if isinstance(device, str):
             device = torch.device(device)
 
-        # 将 NTU joints 转换为 tensor
-        # 重要：ntu_joints_3d 是从 verts_cam + trans_cam 提取的，已经在相机坐标系中
-        # 所以投影时不需要再添加 translation
+        # Convert NTU joints to a tensor
+        # Important: ntu_joints_3d is extracted from verts_cam + trans_cam and is already in camera coordinates
+        # Therefore no extra translation is needed during projection
         ntu_joints_3d_tensor = torch.from_numpy(ntu_joints_3d).float().to(device)
         ntu_joints_3d_tensor = ntu_joints_3d_tensor.unsqueeze(0)  # (1, 25, 3)
 
-        # 计算相机内参
+        # Compute camera intrinsics
         res = torch.tensor([width, height]).float()
         cam_intrinsics = compute_cam_intrinsics(res)  # (1, 3, 3)
 
-        # 确保 cam_intrinsics 有 batch 维度
+        # Ensure cam_intrinsics has a batch dimension
         if cam_intrinsics.dim() == 2:
             cam_intrinsics = cam_intrinsics.unsqueeze(0)  # (1, 3, 3)
 
         cam_intrinsics = cam_intrinsics.to(device)  # (1, 3, 3)
 
-        # 投影到 2D - 不传 translation，因为 ntu_joints_3d 已经包含了 trans_cam
+        # Project to 2D without passing translation because ntu_joints_3d already includes trans_cam
         ntu_joints_2d = full_perspective_projection(
             ntu_joints_3d_tensor,
             cam_intrinsics,
-            translation=None  # 不需要 translation，坐标已经在相机空间
+            translation=None  # translation is not required because the coordinates are already in camera space
         )  # (1, 25, 2)
 
         ntu_joints_2d = ntu_joints_2d[0].cpu().numpy()  # (25, 2)
@@ -191,9 +191,9 @@ def _project_ntu_joints_to_2d(ntu_joints_3d, width, height, val, frame_i2, trans
 
 def _project_ntu_joints_fallback(ntu_joints_3d, width, height, val, frame_i2):
     """
-    Fallback 方法：使用 joints2d 和 joints3d 来估算投影参数
+    Fallback method: estimate projection parameters from joints2d and joints3d
     """
-    # 如果有joints2d和joints3d，使用它们来估算投影参数
+    # If joints2d and joints3d are available, use them to estimate projection parameters
     if 'joints2d' in val and 'joints3d' in val and frame_i2 < len(val['joints2d']) and frame_i2 < len(val['joints3d']):
         joints2d = val['joints2d'][frame_i2]  # (17, 2) or (N, 2) COCO format
         joints3d = val['joints3d'][frame_i2]  # (17, 3) or (N, 3) COCO format
@@ -216,13 +216,13 @@ def _project_ntu_joints_fallback(ntu_joints_3d, width, height, val, frame_i2):
         
         # Ensure we have at least one joint
         if joints2d_pixel.shape[0] > 0 and joints3d.shape[0] > 0:
-            # 使用COCO joints来估算投影参数
-            # 找到pelvis (joint 0) 和几个关键点作为参考
+            # Use COCO joints to estimate projection parameters
+            # Use pelvis (joint 0) and several keypoints as references
             pelvis_2d = joints2d_pixel[0].flatten()  # COCO pelvis 2D, ensure shape (2,)
             pelvis_3d = joints3d[0].flatten() if joints3d[0].ndim > 1 else joints3d[0]  # COCO pelvis 3D, ensure shape (3,)
             
-            # 使用多个点来估算focal length和投影参数
-            # 选择几个稳定的关键点：pelvis, left_hip, right_hip, neck
+            # Use multiple points to estimate focal length and projection parameters
+            # Choose several stable keypoints: pelvis, left_hip, right_hip, and neck
             ref_indices = [0]  # pelvis
             if joints3d.shape[0] > 11:
                 ref_indices.append(11)  # left_hip
@@ -231,7 +231,7 @@ def _project_ntu_joints_fallback(ntu_joints_3d, width, height, val, frame_i2):
             if joints3d.shape[0] > 15:
                 ref_indices.append(15)  # neck/head
             
-            # 估算focal length和scale
+            # Estimate focal length and scale
             valid_refs = []
             for idx in ref_indices:
                 if idx < len(joints3d):
@@ -241,27 +241,27 @@ def _project_ntu_joints_fallback(ntu_joints_3d, width, height, val, frame_i2):
                         valid_refs.append((joint_2d, joint_3d))
             
             if len(valid_refs) > 0:
-                # 使用平均depth来估算scale
+                # Estimate scale from the average depth
                 avg_depth = np.mean([ref[1][2] for ref in valid_refs])
-                # 使用与renderer相同的focal length计算方式
+                # Use the same focal-length computation as the renderer
                 focal_length = (width ** 2 + height ** 2) ** 0.5
                 fx = fy = focal_length
                 cx, cy = width / 2, height / 2
                 
-                # 投影NTU joints - 使用正确的透视投影公式
+                # Project NTU joints using the correct perspective projection formula
                 ntu_joints_2d = np.zeros((25, 2))
                 for i in range(25):
                     if ntu_joints_3d[i, 2] > 0:
-                        # 正确的透视投影: x' = fx * X/Z + cx, y' = fy * Y/Z + cy
+                        # Correct perspective projection: x' = fx * X/Z + cx, y' = fy * Y/Z + cy
                         ntu_joints_2d[i, 0] = fx * ntu_joints_3d[i, 0] / ntu_joints_3d[i, 2] + cx
                         ntu_joints_2d[i, 1] = fy * ntu_joints_3d[i, 1] / ntu_joints_3d[i, 2] + cy
                     else:
-                        # Fallback: use x, y directly with scaling (使用更大的缩放因子)
+                        # Fallback: use x, y directly with scaling (Use a larger scaling factor)
                         scale_fallback = focal_length / (avg_depth + 1e-6) if avg_depth > 0 else width * 0.5
                         ntu_joints_2d[i, 0] = ntu_joints_3d[i, 0] * scale_fallback + width / 2
                         ntu_joints_2d[i, 1] = ntu_joints_3d[i, 1] * scale_fallback + height / 2
                 
-                # 对齐到pelvis位置（NTU joint 0 对应 COCO pelvis）
+                # Align to the pelvis position (NTU joint 0 corresponds to the COCO pelvis)
                 ntu_pelvis_2d = ntu_joints_2d[0].flatten()  # Ensure shape (2,)
                 pelvis_2d_flat = pelvis_2d.flatten() if pelvis_2d.ndim > 1 else pelvis_2d
                 
@@ -277,40 +277,40 @@ def _project_ntu_joints_fallback(ntu_joints_3d, width, height, val, frame_i2):
 
 def draw_motiongpt_predictions(img, motiongpt_predictions, frame_i, width, height, chunk_size=100):
     """
-    在图像上绘制MotionGPT预测文本（独立的可视化函数）
+    Draw MotionGPT prediction text on the image (standalone visualization function)
     
     Args:
-        img: RGB图像 (numpy array)
-        motiongpt_predictions: MotionGPT预测列表
-        frame_i: 当前帧索引
-        width: 图像宽度
-        height: 图像高度
-        chunk_size: 每个chunk的帧数（默认100）
+        img: RGB image (numpy array)
+        motiongpt_predictions: MotionGPT prediction list
+        frame_i: current frame index
+        width: image width
+        height: image height
+        chunk_size: number of frames per chunk (default 100)
     
     Returns:
-        绘制后的RGB图像
+        rendered RGB image
     """
     if not motiongpt_predictions:
         return img
     
-    # 根据帧数切换：每chunk_size帧一个chunk
+    # Switch chunks by frame count: one chunk every chunk_size frames
     chunk_idx = frame_i // chunk_size
     current_pred = None
     
-    # 找到对应的预测（根据chunk索引）
+    # Find the corresponding prediction by chunk index
     if chunk_idx < len(motiongpt_predictions):
         current_pred = motiongpt_predictions[chunk_idx]
     
     if not current_pred:
         return img
     
-    # 确保使用 BGR 格式 - 从当前 RGB 图像转换
+    # Ensure BGR format by converting from the current RGB image
     if len(img.shape) == 3 and img.shape[2] == 3:
         img_bgr = img[..., ::-1].copy()  # RGB to BGR
     else:
         img_bgr = img.copy()
     
-    # 与 classifier 一致：用对角线参考 1920x1080，base_font_scale=1.2，字更大更清楚
+    # Match the classifier: use a 1920x1080 diagonal reference and base_font_scale=1.2 for larger, clearer text
     reference_diagonal = np.sqrt(1920**2 + 1080**2)  # ~2203
     current_diagonal = np.sqrt(width**2 + height**2)
     scale_factor = current_diagonal / reference_diagonal
@@ -321,18 +321,18 @@ def draw_motiongpt_predictions(img, motiongpt_predictions, frame_i, width, heigh
     
     # Position at top-left corner
     font = cv2.FONT_HERSHEY_SIMPLEX
-    # 根据视频高度调整位置
+    # Adjust the position based on the video height
     y_start = int(height * 0.04)  # 4% from top
-    y_start = max(30, min(y_start, 100))  # 限制在30-100像素之间
+    y_start = max(30, min(y_start, 100))  # Clamp between 30 and 100 pixels
     x_start = int(width * 0.01)  # 1% from left
-    x_start = max(10, min(x_start, 50))  # 限制在10-50像素之间
+    x_start = max(10, min(x_start, 50))  # Clamp between 10 and 50 pixels
     
     # Format text: [action_label] description
     action_label = current_pred['action_label']
     description = current_pred['description']
-    # Truncate description if too long (根据视频宽度调整)
-    max_desc_len = int(width / 15)  # 根据视频宽度动态调整
-    max_desc_len = max(40, min(max_desc_len, 80))  # 限制在40-80字符之间
+    # Truncate description if too long (Adjust according to the video width)
+    max_desc_len = int(width / 15)  # Dynamically adjust according to the video width
+    max_desc_len = max(40, min(max_desc_len, 80))  # Clamp between 40 and 80 characters
     if len(description) > max_desc_len:
         description = description[:max_desc_len] + "..."
     
@@ -360,10 +360,10 @@ def draw_motiongpt_predictions(img, motiongpt_predictions, frame_i, width, heigh
     border_thickness = max(2, int(thickness * 0.8))
     cv2.rectangle(img_bgr, (box_x1, box_y1), (box_x2, box_y2), (255, 0, 255), border_thickness)
     
-    # Draw action label (magenta in BGR) - 在左上角
+    # Draw action label (magenta in BGR) - in the top-left corner
     cv2.putText(img_bgr, text_line1, (text_x, y_start), font, font_scale, (255, 0, 255), thickness)
     
-    # Draw description (cyan in BGR, 不用白色) - 在action label下方
+    # Draw description (cyan in BGR, not white) - below the action label
     cv2.putText(img_bgr, text_line2, (text_x, y_start + text_height1 + baseline1 + 5),
                font, font_scale * 0.9, (255, 255, 0), thickness)  # BGR cyan
     
@@ -427,21 +427,21 @@ def run_vis_on_demo(cfg, video, results, output_pth, smpl, vis_global=True):
                     if not line or line.startswith('Subject'):
                         continue
                     # Parse line: start_time end_time [action_label] description
-                    # 格式: "0.00 5.00 [walk] a person walks / slowly" 或 "5.00 10.00 [walk forward] a person walks..."
-                    # 先找到第一个 [ 和对应的 ]
+                    # Format: "0.00 5.00 [walk] a person walks / slowly" or "5.00 10.00 [walk forward] a person walks..."
+                    # First locate the first `[` and its matching `]`
                     start_bracket = line.find('[')
                     end_bracket = line.find(']', start_bracket)
                     if start_bracket > 0 and end_bracket > start_bracket:
                         try:
-                            # 提取时间
+                            # Extract time
                             time_part = line[:start_bracket].strip()
                             time_parts = time_part.split()
                             if len(time_parts) >= 2:
                                 start_time = float(time_parts[0])
                                 end_time = float(time_parts[1])
-                                # 提取action_label（在[]中，可能包含空格）
+                                # Extract action_label (inside `[]`, it may contain spaces)
                                 action_label = line[start_bracket+1:end_bracket].strip()
-                                # 提取description（]之后的内容）
+                                # Extract the description (the content after `]`)
                                 description = line[end_bracket+1:].strip()
                                 motiongpt_predictions.append({
                                     'start_time': start_time,
@@ -508,7 +508,7 @@ def run_vis_on_demo(cfg, video, results, output_pth, smpl, vis_global=True):
                 ntu_joints_3d_tensor = smpl.get_ntu_joints(vertices_tensor)  # (1, 25, 3)
                 ntu_joints_3d = ntu_joints_3d_tensor[0].cpu().numpy()  # (25, 3)
             
-            # Project NTU 3D joints to 2D using full_perspective_projection (参考 real_time.py)
+            # Project NTU 3D joints to 2D using full_perspective_projection (refer to real_time.py)
             trans_cam = None
             if 'trans_cam' in val and frame_i2 < len(val['trans_cam']):
                 trans_cam = val['trans_cam'][frame_i2]
@@ -556,7 +556,7 @@ def run_vis_on_demo(cfg, video, results, output_pth, smpl, vis_global=True):
                 if class_idx < 0 or 'buffering' in label or label in ["waiting...", "rate_limiting", "insufficient_frames"]:
                     continue
                 
-                # 标记有有效的NTU action recognition
+                # Mark that valid NTU action recognition is available
                 has_ntu_action = True
                 
                 # Prepare text
@@ -600,7 +600,7 @@ def run_vis_on_demo(cfg, video, results, output_pth, smpl, vis_global=True):
             # Convert back to RGB
             img = img_bgr[..., ::-1].copy()
         
-        # output_classifier.mp4 不显示 MotionGPT 文本，只显示 NTU action recognition
+        # output_classifier.mp4 does not show MotionGPT text; it only shows NTU action recognition
         
         if vis_global:
             # render the global coordinate
@@ -624,18 +624,18 @@ def run_vis_on_demo(cfg, video, results, output_pth, smpl, vis_global=True):
     writer.close()
 def render_skeleton(joints, img, line_thickness=2, point_radius=4):
     """
-    在图像上渲染骨骼可视化，使用提供的关节位置。
+    Render skeleton visualization on the image using the provided joint positions.
     
     Args:
-        joints: 关节位置张量，形状为 (num_joints, 3)
-        img: 要渲染骨骼的图像
-        line_thickness: 连接关节的线条粗细
-        point_radius: 表示关节的点的半径
+        joints: joint position tensor with shape (num_joints, 3)
+        img: image to render the skeleton onto
+        line_thickness: line thickness for connecting joints
+        point_radius: radius of the points used to draw joints
     
     Returns:
-        带有渲染骨骼的图像
+        image with the rendered skeleton
     """
-    # 确保关节数据在CPU上以便OpenCV操作
+    # Ensure the joint data is on CPU for OpenCV operations
     joints_np = joints.detach().cpu().numpy()
     
     img_h, img_w = img.shape[:2]
@@ -645,45 +645,45 @@ def render_skeleton(joints, img, line_thickness=2, point_radius=4):
     joints_2d = joints_2d.astype(np.int32)
     
     
-    # 使用提供的骨骼连接
+    # Use the provided bone connections
     connections = [    
-                (0, 1), (0, 2), (1, 3), (2,4),  # 头部
-                (6, 8), (8, 10),  # 左臂
-                (7, 9), (5, 7),   # 右臂
-                (5, 6), (5, 11), (6, 12),  # 躯干
-                (11, 13), (13, 15),  # 左腿
-                (12, 14), (14, 16),  # 右腿
-                (11, 12),  # 骨盆
+                (0, 1), (0, 2), (1, 3), (2,4),  # head
+                (6, 8), (8, 10),  # left arm
+                (7, 9), (5, 7),   # right arm
+                (5, 6), (5, 11), (6, 12),  # torso
+                (11, 13), (13, 15),  # left leg
+                (12, 14), (14, 16),  # right leg
+                (11, 12),  # pelvis
     ]
 
     
-    # 绘制连接
+    # Draw connections
     img_copy = img.copy()
     for i, (j1, j2) in enumerate(connections):
-        # 检查关节是否在图像边界内和索引范围内
+        # Check whether the joints are inside image bounds and within the valid index range
         if (j1 < len(joints_2d) and j2 < len(joints_2d) and
             0 <= joints_2d[j1, 0] < img_w and 0 <= joints_2d[j1, 1] < img_h and
             0 <= joints_2d[j2, 0] < img_w and 0 <= joints_2d[j2, 1] < img_h):
             
                 
-            # 绘制线条
+            # Draw lines
             cv2.line(img_copy, 
                     tuple(joints_2d[j1]), 
                     tuple(joints_2d[j2]), 
                     (51, 255, 51), 
                     thickness=line_thickness)
     
-    # 绘制关节点
+    # Draw joint points
     for i, joint in enumerate(joints_2d):
-        # 检查关节是否在图像边界内
+        # Check whether the joints are inside image bounds
         if 0 <= joint[0] < img_w and 0 <= joint[1] < img_h:
             cv2.circle(img_copy, 
                       tuple(joint), 
                       radius=point_radius, 
-                      color=(255, 255, 255),  # 关节点使用白色
-                      thickness=-1)  # 填充圆形
+                      color=(255, 255, 255),  # use white for joint points
+                      thickness=-1)  # filled circle
         
-            # 可选：添加关节编号标签，便于调试
+            # Optional: add joint index labels for debugging
             # cv2.putText(img_copy, str(i), (joint[0]+5, joint[1]+5), 
             #            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
     
@@ -696,26 +696,26 @@ import torch
 
 def plot_3d_joints(joints3d, bones=None, save_path='3d_skeleton.png'):
     """
-    可视化3D关节位置，并标注关节编号，同时保存为图片。
+    Visualize 3D joint positions, annotate joint indices, and save the image.
     Args:
-        joints3d (torch.Tensor or np.ndarray): 3D关节位置，形状 (N, 3)
-        bones (list of tuple): 骨骼连接，用于连线，可选
-        save_path (str): 图片保存路径
+        joints3d (torch.Tensor or np.ndarray): 3D joint positions, shape (N, 3)
+        bones (list of tuple): bone connections used for drawing lines, optional
+        save_path (str): path to save the image
     """
     joints3d = joints3d.cpu().numpy() if isinstance(joints3d, torch.Tensor) else joints3d
     
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     
-    # 绘制关节点
+    # Draw joint points
     ax.scatter(joints3d[:, 0], joints3d[:, 1], joints3d[:, 2], c='b', marker='o')
 
-    # 标注关节编号
+    # Annotate joint indices
     for i, (x, y, z) in enumerate(joints3d):
         if i >=17:
             ax.text(x, y, z, str(i), color='red', fontsize=8)
 
-    # 绘制骨骼连接
+    # Draw bone connections
     if bones:
         for (j1, j2) in bones:
             x_vals = [joints3d[j1, 0], joints3d[j2, 0]]
@@ -728,9 +728,9 @@ def plot_3d_joints(joints3d, bones=None, save_path='3d_skeleton.png'):
     ax.set_zlabel('Z')
     plt.title('3D Joints Visualization')
     
-    # 保存图片
+    # Save the image
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"3D关节图已保存至 {save_path}")
+    print(f"3D joint plot saved to {save_path}")
     plt.show()
 
 
@@ -815,7 +815,7 @@ def render_metrics(img, step_length, left_knee_angle, right_knee_angle, cadence,
 
 def run_skeleton_vis(cfg, video, results, output_pth, smpl, vis_global=True):
     """
-    使用 NTU 60 骨架格式渲染骨架可视化（参考 real_time.py）
+    Render skeleton visualization using the NTU 60 skeleton format (see real_time.py)
     """
     cap = cv2.VideoCapture(video)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -837,21 +837,21 @@ def run_skeleton_vis(cfg, video, results, output_pth, smpl, vis_global=True):
                     if not line or line.startswith('Subject'):
                         continue
                     # Parse line: start_time end_time [action_label] description
-                    # 格式: "0.00 5.00 [walk] a person walks / slowly" 或 "5.00 10.00 [walk forward] a person walks..."
-                    # 先找到第一个 [ 和对应的 ]
+                    # Format: "0.00 5.00 [walk] a person walks / slowly" or "5.00 10.00 [walk forward] a person walks..."
+                    # First locate the first `[` and its matching `]`
                     start_bracket = line.find('[')
                     end_bracket = line.find(']', start_bracket)
                     if start_bracket > 0 and end_bracket > start_bracket:
                         try:
-                            # 提取时间
+                            # Extract time
                             time_part = line[:start_bracket].strip()
                             time_parts = time_part.split()
                             if len(time_parts) >= 2:
                                 start_time = float(time_parts[0])
                                 end_time = float(time_parts[1])
-                                # 提取action_label（在[]中，可能包含空格）
+                                # Extract action_label (inside `[]`, it may contain spaces)
                                 action_label = line[start_bracket+1:end_bracket].strip()
-                                # 提取description（]之后的内容）
+                                # Extract the description (the content after `]`)
                                 description = line[end_bracket+1:].strip()
                                 motiongpt_predictions.append({
                                     'start_time': start_time,
@@ -903,17 +903,17 @@ def run_skeleton_vis(cfg, video, results, output_pth, smpl, vis_global=True):
             if len(frame_i2) == 0: continue
             frame_i2 = frame_i2[0]
 
-            # 获取 NTU joints (参考 real_time.py 中的方法)
+            # Get NTU joints (refer to real_time.py helper used in)
             if 'ntu_joints' in val and frame_i2 < len(val['ntu_joints']):
                 ntu_joints_3d = val['ntu_joints'][frame_i2]  # (25, 3)
             else:
-                # 从 vertices 中提取 NTU joints
+                # Extract NTU joints from vertices
                 vertices = val['verts'][frame_i2]  # (6890, 3)
                 vertices_tensor = torch.from_numpy(vertices).float().to(cfg.DEVICE).unsqueeze(0)
                 ntu_joints_3d_tensor = smpl.get_ntu_joints(vertices_tensor)  # (1, 25, 3)
                 ntu_joints_3d = ntu_joints_3d_tensor[0].cpu().numpy()  # (25, 3)
 
-            # 使用 trans_cam 进行投影（参考 real_time.py 中的 full_perspective_projection）
+            # Project with trans_cam (see full_perspective_projection in real_time.py)
             trans_cam = None
             if 'trans_cam' in val and frame_i2 < len(val['trans_cam']):
                 trans_cam = val['trans_cam'][frame_i2]
@@ -923,7 +923,7 @@ def run_skeleton_vis(cfg, video, results, output_pth, smpl, vis_global=True):
                 trans_cam=trans_cam, device=cfg.DEVICE
             )
 
-            # 渲染 NTU 骨架（始终绘制）
+            # Render the NTU skeleton (always draw it)
             img_bgr = _render_ntu_skeleton(img_bgr, ntu_joints_2d)
 
             if False:
@@ -935,7 +935,7 @@ def run_skeleton_vis(cfg, video, results, output_pth, smpl, vis_global=True):
         # Convert back to RGB for imageio
         img = img_bgr[..., ::-1].copy()
         
-        # output_classifier.mp4 不显示 MotionGPT 文本，只显示 NTU skeleton
+        # output_classifier.mp4 does not show MotionGPT text; it only shows the NTU skeleton
         writer.append_data(img)
         bar.next()
         frame_i += 1
@@ -946,7 +946,7 @@ def run_skeleton_vis(cfg, video, results, output_pth, smpl, vis_global=True):
 
 def run_gpt_text_vis(cfg, video, results, output_pth, smpl, vis_global=True):
     """
-    渲染 MotionGPT 文本预测 + NTU skeleton（独立的可视化分支）
+    Render MotionGPT text predictions + NTU skeleton (standalone visualization branch)
     """
     cap = cv2.VideoCapture(video)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -965,21 +965,21 @@ def run_gpt_text_vis(cfg, video, results, output_pth, smpl, vis_global=True):
                     if not line or line.startswith('Subject'):
                         continue
                     # Parse line: start_time end_time [action_label] description
-                    # 格式: "0.00 5.00 [walk] a person walks / slowly" 或 "5.00 10.00 [walk forward] a person walks..."
-                    # 先找到第一个 [ 和对应的 ]
+                    # Format: "0.00 5.00 [walk] a person walks / slowly" or "5.00 10.00 [walk forward] a person walks..."
+                    # First locate the first `[` and its matching `]`
                     start_bracket = line.find('[')
                     end_bracket = line.find(']', start_bracket)
                     if start_bracket > 0 and end_bracket > start_bracket:
                         try:
-                            # 提取时间
+                            # Extract time
                             time_part = line[:start_bracket].strip()
                             time_parts = time_part.split()
                             if len(time_parts) >= 2:
                                 start_time = float(time_parts[0])
                                 end_time = float(time_parts[1])
-                                # 提取action_label（在[]中，可能包含空格）
+                                # Extract action_label (inside `[]`, it may contain spaces)
                                 action_label = line[start_bracket+1:end_bracket].strip()
-                                # 提取description（]之后的内容）
+                                # Extract the description (the content after `]`)
                                 description = line[end_bracket+1:].strip()
                                 motiongpt_predictions.append({
                                     'start_time': start_time,
@@ -1014,23 +1014,23 @@ def run_gpt_text_vis(cfg, video, results, output_pth, smpl, vis_global=True):
         img = org_img[..., ::-1].copy()  # Convert to RGB
         img_bgr = img[..., ::-1].copy()  # Convert to BGR for OpenCV
         
-        # Render NTU skeleton (始终绘制)
+        # Render NTU skeleton (always draw)
         for _id, val in results.items():
             frame_i2 = np.where(val['frame_ids'] == frame_i)[0]
             if len(frame_i2) == 0: continue
             frame_i2 = frame_i2[0]
 
-            # 获取 NTU joints
+            # Get NTU joints
             if 'ntu_joints' in val and frame_i2 < len(val['ntu_joints']):
                 ntu_joints_3d = val['ntu_joints'][frame_i2]  # (25, 3)
             else:
-                # 从 vertices 中提取 NTU joints
+                # Extract NTU joints from vertices
                 vertices = val['verts'][frame_i2]  # (6890, 3)
                 vertices_tensor = torch.from_numpy(vertices).float().to(cfg.DEVICE).unsqueeze(0)
                 ntu_joints_3d_tensor = smpl.get_ntu_joints(vertices_tensor)  # (1, 25, 3)
                 ntu_joints_3d = ntu_joints_3d_tensor[0].cpu().numpy()  # (25, 3)
 
-            # 使用 trans_cam 进行投影
+            # Project using trans_cam
             trans_cam = None
             if 'trans_cam' in val and frame_i2 < len(val['trans_cam']):
                 trans_cam = val['trans_cam'][frame_i2]
@@ -1040,13 +1040,13 @@ def run_gpt_text_vis(cfg, video, results, output_pth, smpl, vis_global=True):
                 trans_cam=trans_cam, device=cfg.DEVICE
             )
 
-            # 渲染 NTU 骨架
+            # Render the NTU skeleton
             img_bgr = _render_ntu_skeleton(img_bgr, ntu_joints_2d)
         
         # Convert back to RGB
         img = img_bgr[..., ::-1].copy()
         
-        # Display MotionGPT predictions (绘制文本)
+        # Display MotionGPT predictions (draw text)
         img = draw_motiongpt_predictions(img, motiongpt_predictions, frame_i, width, height, chunk_size=100)
         
         writer.append_data(img)

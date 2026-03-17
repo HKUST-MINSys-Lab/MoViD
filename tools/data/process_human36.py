@@ -73,21 +73,21 @@ import datetime
 # n = len(indices)
 
 # all_keys = dataset.keys()
-# # 复制原数据以保留结构
+# # Copy the original data to preserve the structure
 # new_dataset = {key: [] for key in all_keys}
 
-# # 添加结尾索引用于切片
+# # Add the end index for slicing
 # indices.append(len(dataset['frame_id']))
 
-# # 遍历每段区间
+# # Iterate over each interval
 # for i in range(len(indices) - 1):
 #     start = indices[i]
 #     end = indices[i + 1]
     
 #     for key in all_keys:
-#         # 按段切片，每段作为 list 元素
+#         # Slice by interval, with each segment stored as a list element
 #         new_dataset[key].append(dataset[key][start:end])
-# # 保存为 joblib 文件（list of dicts）
+# # Save as a joblib file (list of dicts)
 # joblib.dump(new_dataset, '/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_test_vit.pth')
 
 

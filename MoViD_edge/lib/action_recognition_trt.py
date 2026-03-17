@@ -1,8 +1,8 @@
 """
 TensorRT-based Action Recognition Module
 
-使用 TensorRT 引擎进行快速动作识别推理
-支持 STGCN 模型的 TensorRT 格式
+Use a TensorRT engine for fast action-recognition inference
+Supports the TensorRT format for STGCN models
 """
 import os
 import numpy as np
@@ -90,7 +90,7 @@ class ActionRecognizerTRT:
         # Smoothing parameters
         self.prediction_history: List[Tuple[int, float, str]] = []
         self.history_size = 5
-        self.confidence_threshold = 0.1  # 降低阈值，因为 softmax 后置信度可能较低
+        self.confidence_threshold = 0.1  # Lower the threshold because confidence may be lower after softmax
         self.current_action = "waiting..."
         self.current_confidence = 0.0
         self.frames_since_prediction = 0
@@ -123,7 +123,7 @@ class ActionRecognizerTRT:
     
     def add_skeleton_frame(self, joints3d: np.ndarray):
         """
-        Add a skeleton frame to the buffer (实时更新)
+        Add a skeleton frame to the buffer (real-time updates)
         
         Args:
             joints3d: 3D joints, shape (num_keypoints, 3) or (batch, num_keypoints, 3)
@@ -143,35 +143,35 @@ class ActionRecognizerTRT:
                 padded[:joints3d.shape[0]] = joints3d
                 joints3d = padded
         
-        # 实时更新：每帧都添加到 buffer
+        # Real-time updates: append every frame to the buffer
         self.skeleton_buffer.append(joints3d.astype(np.float32))
         
-        # Keep only window_size frames (滑动窗口)
-        # 这样 buffer 始终包含最新的 window_size 帧
+        # Keep only window_size frames (sliding window)
+        # This keeps the buffer aligned to the most recent window_size frames
         if len(self.skeleton_buffer) > self.window_size:
             self.skeleton_buffer.pop(0)
     
     def _prepare_input(self) -> np.ndarray:
         """
         Prepare input tensor for TensorRT inference
-        使用最新的 buffer 内容，确保实时性
+        Use the latest buffer contents to preserve real-time behavior
         """
         num_frames = len(self.skeleton_buffer)
         
-        # 使用最新的 buffer 内容（实时更新）
-        # Stack frames: (T, V, C) - 最新的帧在最后
+        # Use the latest buffer contents (real-time updates)
+        # Stack frames: (T, V, C) - newest frames at the end
         keypoints = np.stack(self.skeleton_buffer, axis=0)
         
         # Pad or sample to window_size
         if num_frames < self.window_size:
-            # Pad with zeros (使用最新的帧，前面补零)
+            # Pad with zeros (place the newest frames at the end and pad the front)
             padded = np.zeros((self.window_size, self.num_keypoints, 3), dtype=np.float32)
-            padded[-num_frames:] = keypoints  # 最新的帧放在最后
+            padded[-num_frames:] = keypoints  # place the newest frames at the end
             keypoints = padded
         elif num_frames > self.window_size:
-            # Uniform sample - 确保包含最新的帧
+            # Uniform sample - ensure the newest frames are included
             indices = np.linspace(0, num_frames - 1, self.window_size, dtype=int)
-            # 确保最后一个索引是 num_frames - 1（最新的帧）
+            # Ensure the last index is num_frames - 1 (the newest frame)
             indices[-1] = num_frames - 1
             keypoints = keypoints[indices]
         
@@ -212,9 +212,9 @@ class ActionRecognizerTRT:
             logger.debug(f"Buffer has {buffer_size}/{min_frames_required} frames, waiting...")
             return -1, 0.0, f"buffering_{buffer_size}/{min_frames_required}"
         
-        # 实时预测：每帧都进行预测，保证准确性
-        # Buffer 已经实时更新（每帧都调用 add_skeleton_frame）
-        # 现在每帧都进行预测，使用最新的 buffer 内容
+        # Real-time prediction: run inference on every frame to preserve accuracy
+        # The buffer is updated in real time because add_skeleton_frame is called on every frame
+        # Now predict on every frame using the latest buffer contents
         logger.debug(f"Performing real-time prediction: buffer={buffer_size} frames")
         
         try:
@@ -249,7 +249,7 @@ class ActionRecognizerTRT:
             
             logger.debug(f"TRT prediction: {label_name}, raw={raw_score:.4f}, softmax={confidence:.4f}")
             
-            # 无论置信度如何，都更新 current_action（用于显示）
+            # Update current_action for display regardless of confidence
             self.current_action = label_name
             self.current_confidence = confidence
             

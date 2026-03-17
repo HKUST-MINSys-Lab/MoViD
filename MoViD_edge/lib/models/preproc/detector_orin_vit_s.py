@@ -80,15 +80,15 @@ class DetectionModel(object):
     def track(self, img, fps, length):
         H_orig, W_orig = img.shape[:2]
 
-        # 先resize，检测用
+        # Resize first for detection
         img_resized = cv2.resize(img, (1440, 810))
 
-        # bbox检测，得到的是相对于 (1440, 810) 的坐标
+        # BBox detection returns coordinates relative to (1440, 810)
         bboxes = self.bbox_model.predict(
             img_resized, device=self.device, classes=0, conf=BBOX_CONF, save=False, verbose=False
         )[0].boxes.xyxy.detach().cpu().numpy()
 
-        # 将bbox映射回原图坐标系
+        # Map the bbox back to the original image coordinate system
         scale_x = W_orig / 1440
         scale_y = H_orig / 810
 
@@ -101,7 +101,7 @@ class DetectionModel(object):
             y2_orig = y2 * scale_y
             bboxes_orig.append([x1_orig, y1_orig, x2_orig, y2_orig])
 
-        # 用原图坐标系的bbox进行后续处理
+        # Use the bbox in the original image coordinate system for downstream processing
         bboxes = [{'bbox': np.array(b)} for b in bboxes_orig]
 
         # # bbox detection
@@ -122,7 +122,7 @@ class DetectionModel(object):
         # only keep the person with the highest score
         if len(pose_results) > 0:
             def kp_conf(person):
-                # keypoints: (N, 3), 置信度在第3列
+                # keypoints: (N, 3), confidence is stored in the third column
                 return person['keypoints'][:, 2].mean()
             best_person = max(pose_results, key=kp_conf)
             pose_results = [best_person]

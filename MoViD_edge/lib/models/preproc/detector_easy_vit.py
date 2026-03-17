@@ -27,14 +27,14 @@ def load_engine(trt_engine_path):
     try:
         with open(trt_engine_path,'rb') as f:
             engine = runtime.deserialize_cuda_engine(f.read())
-        print(f"成功加载引擎: {trt_engine_path}")
+        print(f"Successfully loaded engine: {trt_engine_path}")
         return engine
     except Exception as e:
         print(f"Failed to deserialize the engine: {e}")
         return None
     
 def allocate_buffers(engine):
-    """优化的缓冲区分配，使用更少的内存"""
+    """Optimized buffer allocation using less memory"""
     inputs = []
     outputs = []
     bindings = []
@@ -49,7 +49,7 @@ def allocate_buffers(engine):
         print(f"Binding {i}: Name={name}, Shape={shape}, Dtype={dtype}, Input={is_input}")
         size = trt.volume(shape)
         
-        # 使用页锁定内存，但分配最小必要大小
+        # Use page-locked memory while allocating only the minimum required size
         host_mem = cuda.pagelocked_empty(size, dtype)
         device_mem = cuda.mem_alloc(host_mem.nbytes)
         bindings.append(int(device_mem))
@@ -76,7 +76,7 @@ class DetectionModel(object):
             'keypoints': []
         }
         
-        # 延迟初始化TensorRT组件，在其他模型加载后再初始化
+        # Lazily initialize TensorRT components after other models finish loading
         self.trt_initialized = False
         self.context = None
         self.inputs = None
@@ -84,28 +84,28 @@ class DetectionModel(object):
         self.bindings = None
         self.stream = None
         
-        print("DetectionModel基础初始化完成，TensorRT将在需要时初始化")
+        print("Base DetectionModel initialization finished; TensorRT will be initialized when needed")
 
     def lazy_init_trt(self):
-        """延迟初始化TensorRT组件"""
+        """Lazily initialize TensorRT components"""
         if self.trt_initialized:
             return
             
-        print("开始初始化TensorRT组件...")
+        print("Starting TensorRT component initialization...")
         
-        # 清理GPU缓存
+        # Clear the GPU cache
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            print(f"GPU内存清理前: {torch.cuda.memory_allocated()/1024**2:.1f}MB")
+            print(f"GPU memory before cleanup: {torch.cuda.memory_allocated()/1024**2:.1f}MB")
         
         try:
-            # 初始化TensorRT相关组件
+            # Initialize TensorRT-related components
             self.context, self.inputs, self.outputs, self.bindings = self.setup_trt(TRT_PATH)
             
-            # 创建CUDA stream用于异步处理
+            # Create a CUDA stream for asynchronous processing
             self.stream = cuda.Stream()
             
-            # 获取输出形状
+            # Get the output shape
             if len(self.outputs) > 0:
                 self.output_shape = self.outputs[0]['shape']
             else:
@@ -114,16 +114,16 @@ class DetectionModel(object):
             self.output_size = np.prod(self.output_shape)
             self.trt_initialized = True
             
-            print("TensorRT组件初始化完成!")
+            print("TensorRT component initialization complete!")
             if torch.cuda.is_available():
-                print(f"GPU内存使用: {torch.cuda.memory_allocated()/1024**2:.1f}MB")
+                print(f"GPU memory usage: {torch.cuda.memory_allocated()/1024**2:.1f}MB")
                 
         except Exception as e:
-            print(f"TensorRT初始化失败: {e}")
+            print(f"TensorRT initialization failed: {e}")
             raise
 
     def setup_trt(self, trt_path):
-        """设置TensorRT引擎和缓冲区"""
+        """Set up the TensorRT engine and buffers"""
         logger = trt.Logger(trt.Logger.ERROR)
         trt_runtime = trt.Runtime(logger)
         trt_engine = load_engine(trt_path)
@@ -131,17 +131,17 @@ class DetectionModel(object):
         if trt_engine is None:
             raise RuntimeError("Failed to load TensorRT engine")
 
-        # 分配缓冲区
+        # Allocate buffers
         inputs, outputs, bindings = allocate_buffers(trt_engine)
         
-        # 创建执行上下文
+        # Create the execution context
         context = trt_engine.create_execution_context()
         
         return context, inputs, outputs, bindings
     
     def inference_stream(self, img):
-        """使用CUDA stream进行异步推理"""
-        # 确保TensorRT已初始化
+        """Run asynchronous inference with a CUDA stream"""
+        # Ensure TensorRT has been initialized
         if not self.trt_initialized:
             self.lazy_init_trt()
             
@@ -150,38 +150,38 @@ class DetectionModel(object):
             
             img_input = cv2.resize(img, (self.WIDTH,self.HEIGHT), interpolation=cv2.INTER_LINEAR)
             
-            # 转换为模型输入格式: (batch, channels, height, width)
+            # Convert to the model input format: (batch, channels, height, width)
             img_input = img_input.astype(np.float32).transpose(2, 0, 1)[None, ...] / 255.0
             img_input_contiguous = np.ascontiguousarray(img_input)
 
             
-            # 异步拷贝输入数据到GPU
+            # Asynchronously copy input data to the GPU
             if len(self.inputs) > 0:
                 np.copyto(self.inputs[0]['host'], img_input_contiguous.ravel())
                 cuda.memcpy_htod_async(self.inputs[0]['device'], self.inputs[0]['host'], self.stream)
             
-            # 异步执行推理
+            # Launch inference asynchronously
             success = self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
             if not success:
                 return None
             
-            # 异步拷贝输出数据到CPU
+            # Asynchronously copy output data back to the CPU
             if len(self.outputs) > 0:
                 cuda.memcpy_dtoh_async(self.outputs[0]['host'], self.outputs[0]['device'], self.stream)
             
-            # 同步等待所有异步操作完成
+            # Synchronize and wait for all asynchronous work to finish
             self.stream.synchronize()
             
-            # 获取输出结果
+            # Fetch the output results
             if len(self.outputs) > 0:
                 output_host = self.outputs[0]['host'].reshape(self.output_shape)
                 heatmaps = output_host
                 
-                # 修正center和scale的计算
+                # Correct the center and scale computation
                 center = np.array([[org_w//2, org_h//2]])
                 scale = np.array([[org_w, org_h]])
                 
-                # 从热图中提取关键点
+                # Extract keypoints from heatmaps
                 points, prob = keypoints_from_heatmaps(
                     heatmaps=heatmaps, 
                     center=center, 
@@ -196,7 +196,7 @@ class DetectionModel(object):
             else:
                 return None
         except Exception as e:
-            print(f"推理出错: {e}")
+            print(f"Inference failed: {e}")
             return None
         
     def xyxy_to_cxcys(self, bbox, s_factor=1.05):
@@ -228,34 +228,34 @@ class DetectionModel(object):
         self.tracking_results['bbox'] = bbox
 
     def track(self, img, fps, length):
-        """使用stream方式进行追踪"""
-        # 保持最近3帧的结果（减少内存使用）
+        """Track with the streaming path"""
+        # Keep only the most recent 3 frames of results to reduce memory usage
         for key in ['id', 'frame_id', 'keypoints','bbox']:
             self.tracking_results[key] = list(self.tracking_results[key][-10:]) if len(self.tracking_results[key]) > 0 else []
 
-        # 使用stream方式进行推理
+        # Use the streaming path for inference
         keypoints_result = self.inference_stream(img)
         
         if keypoints_result is not None and len(keypoints_result) > 0:
-            # 取第一个人的关键点
+            # Take the keypoints for the first person
             kpts = keypoints_result[0]
             
             if kpts.shape[0] > 17:
-                kpts = kpts[:17]  # 只保留前17个关键点
+                kpts = kpts[:17]  # Keep only the first 17 keypoints
             
-            # 检查有效关键点数量
+            # Check the number of valid keypoints
             valid = kpts[:, 2] > VIS_THRESH
             if valid.sum() < MINIMUM_JOINTS:
                 self.frame_id += 1
-                return  # 跳过该帧
+                return  # Skip this frame
             
-            # 计算边界框
+            # Compute the bounding box
             x1, y1 = kpts[valid, 0].min(), kpts[valid, 1].min()
             x2, y2 = kpts[valid, 0].max(), kpts[valid, 1].max()
             bbox = np.array([x1, y1, x2, y2])
             bbox = self.xyxy_to_cxcys(bbox, s_factor=1.05)
 
-            # 保存追踪结果
+            # Store tracking results
             self.tracking_results['id'].append(0)
             self.tracking_results['frame_id'].append(self.frame_id)
             self.tracking_results['bbox'].append(bbox)
@@ -263,14 +263,14 @@ class DetectionModel(object):
         
         self.frame_id += 1
         
-        # 定期清理内存
+        # Periodically free memory
         if self.frame_id % 100 == 0:
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
     def process(self, fps):
-        """处理追踪结果"""
+        """Process tracking results"""
         if len(self.tracking_results['id']) == 0:
             return {}
             
@@ -290,14 +290,14 @@ class DetectionModel(object):
                     if key == 'id': continue
                     output[_id][key] = val[idxs]
             
-            # 简化的平滑处理，减少计算量
+            # Use simplified smoothing to reduce computation
             ids = list(output.keys())
             for _id in ids:
                 if len(output[_id]['bbox']) < MINIMUM_FRMAES:
                     del output[_id]
                     continue
                 
-                # 使用较小的kernel减少计算量
+                # Use a smaller kernel to reduce computation
                 kernel = min(5, len(output[_id]['bbox']))
                 if kernel >= 3 and kernel < len(output[_id]['bbox']):
                     smoothed_bbox = np.array([signal.medfilt(param, kernel) for param in output[_id]['bbox'].T]).T
@@ -306,13 +306,13 @@ class DetectionModel(object):
         return output
     
     def cleanup(self):
-        """主动清理资源"""
+        """Actively release resources"""
         if self.trt_initialized:
             try:
                 if self.stream:
                     self.stream.synchronize()
                     
-                # 清理CUDA内存
+                # Free CUDA memory
                 if self.inputs:
                     for inp in self.inputs:
                         if 'device' in inp:
@@ -323,30 +323,30 @@ class DetectionModel(object):
                         if 'device' in out:
                             out['device'].free()
                             
-                print("TensorRT资源已清理")
+                print("TensorRT resources have been released")
             except:
                 pass
                 
-        # 清理Python内存
+        # Free Python memory
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
     
     def __del__(self):
-        """析构函数"""
+        """Destructor"""
         self.cleanup()
 
 
-# 内存监控工具
+# Memory-monitoring utility
 def print_memory_usage(prefix=""):
-    """打印当前内存使用情况"""
+    """Print the current memory usage"""
     if torch.cuda.is_available():
         allocated = torch.cuda.memory_allocated() / 1024**2
         cached = torch.cuda.memory_reserved() / 1024**2
-        print(f"{prefix}GPU内存 - 已分配: {allocated:.1f}MB, 缓存: {cached:.1f}MB")
+        print(f"{prefix}GPU memory - allocated: {allocated:.1f}MB, cached: {cached:.1f}MB")
     
     import psutil
     process = psutil.Process()
     cpu_mem = process.memory_info().rss / 1024**2
-    print(f"{prefix}CPU内存: {cpu_mem:.1f}MB")
+    print(f"{prefix}CPU memory: {cpu_mem:.1f}MB")
 

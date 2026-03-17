@@ -104,7 +104,7 @@ class ActionRecognizer:
         # Buffer to store skeleton sequences
         self.skeleton_buffer: List[np.ndarray] = []
         
-        # 保持上一次的预测结果，用于稳定显示
+        # Keep the previous prediction for stable display
         self.current_action: str = "waiting..."
         self.current_confidence: float = 0.0
         
@@ -169,7 +169,7 @@ class ActionRecognizer:
     
     def add_skeleton_frame(self, joints3d: np.ndarray):
         """
-        Add a skeleton frame to the buffer (实时更新)
+        Add a skeleton frame to the buffer (real-time updates)
         
         Args:
             joints3d: 3D joints from WHAM, shape (num_joints, 3) or (batch, num_joints, 3)
@@ -178,11 +178,11 @@ class ActionRecognizer:
         # Extract single frame: (1, V, 3)
         frame_keypoint = keypoint[0, 0, :, :]  # (V, 3)
         
-        # 实时更新：每帧都添加到 buffer
+        # Real-time updates: append every frame to the buffer
         self.skeleton_buffer.append(frame_keypoint)
         
-        # Keep only the last window_size frames (滑动窗口)
-        # 这样 buffer 始终包含最新的 window_size 帧
+        # Keep only the last window_size frames (sliding window)
+        # This keeps the buffer aligned to the most recent window_size frames
         if len(self.skeleton_buffer) > self.window_size:
             self.skeleton_buffer.pop(0)
     
@@ -211,15 +211,15 @@ class ActionRecognizer:
             logger.debug(f"Buffer has {buffer_size}/{min_frames_required} frames, waiting...")
             return -1, 0.0, f"buffering_{buffer_size}/{min_frames_required}"
         
-        # 实时预测：使用最新的 buffer 内容
-        # Buffer 已经实时更新（每帧都调用 add_skeleton_frame）
-        # skeleton_buffer 是一个列表，最新的帧在最后
-        # 现在使用最新的 buffer 内容进行预测
+        # Real-time prediction: use the latest buffer contents
+        # The buffer is updated in real time because add_skeleton_frame is called on every frame
+        # skeleton_buffer is a list with the newest frame at the end
+        # Predict using the latest buffer contents
         
         # Convert buffer to pyskl format: (M=1, T, V, C=3)
-        # 使用最新的 buffer 内容（最新的帧在列表末尾）
+        # Use the latest buffer contents (newest frame at the end of the list)
         num_frames = buffer_size
-        keypoint = np.stack(self.skeleton_buffer, axis=0)  # (T, V, 3) - 最新的帧在最后
+        keypoint = np.stack(self.skeleton_buffer, axis=0)  # (T, V, 3) - newest frames at the end
         keypoint = keypoint[np.newaxis, :, :, :]  # (1, T, V, 3)
         
         # Create fake annotation dict for pyskl
@@ -242,12 +242,12 @@ class ActionRecognizer:
             if len(results) > 0:
                 class_idx, confidence = results[0]
                 label_name = self.label_map[class_idx] if self.label_map else f"class_{class_idx}"
-                # 更新当前预测结果
+                # Update the current prediction result
                 self.current_action = label_name
                 self.current_confidence = float(confidence)
                 return class_idx, float(confidence), label_name
             else:
-                # 没有预测结果，返回上一次的预测
+                # No prediction result; return the previous prediction
                 return -1, self.current_confidence, self.current_action
         except Exception as e:
             import traceback

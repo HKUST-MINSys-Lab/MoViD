@@ -28,7 +28,7 @@ from lib.utils import transforms
 
 
 class _OneEuroFilterGeneric:
-    """通用 OneEuroFilter，适用于任意实数信号（无 missing-keypoint mask）。"""
+    """Generic OneEuroFilter for arbitrary real-valued signals (without a missing-keypoint mask)."""
 
     def __init__(self, x0, min_cutoff=1.0, beta=0.5, d_cutoff=30.0):
         self.min_cutoff = min_cutoff
@@ -43,7 +43,7 @@ class _OneEuroFilterGeneric:
         return r / (r + 1)
 
     def __call__(self, x):
-        t_e = 1.0 / self.d_cutoff  # 固定帧间隔 = 1/fps
+        t_e = 1.0 / self.d_cutoff  # fixed frame interval = 1/fps
         a_d = self._smoothing_factor(t_e, self.d_cutoff)
         dx = (x - self.x_prev) / t_e
         dx_hat = a_d * dx + (1 - a_d) * self.dx_prev
@@ -82,14 +82,14 @@ KEYPOINTS_THR = 0.3
 
 def convert_cxys_to_xywh(bbox):
     """
-    将边界框从 [center_x, center_y, scale] 格式
-    转换为 [x_min, y_min, width, height] 格式。
+    Convert a bounding box from the [center_x, center_y, scale] format
+    to the [x_min, y_min, width, height] format.
 
-    假设一个标准的裁剪框尺寸为 200px，并由 's' 进行缩放。
-    这是在很多人体姿态估计流程中的常见约定。
+    Assume a canonical crop size of 200px, scaled by `s`.
+    This is a common convention in many human-pose pipelines.
     """
     cx, cy, s = bbox
-    box_size = s * 200  # 基于常见约定的边长计算
+    box_size = s * 200  # edge length computed from the common convention
     
     x_min = cx - box_size / 2
     y_min = cy - box_size / 2
@@ -99,7 +99,7 @@ def convert_cxys_to_xywh(bbox):
     return [x_min, y_min, width, height]
 
 def calculate_iou(box1, box2):
-    """计算两个边界框的交并比(IoU)"""
+    """Compute the intersection-over-union (IoU) of two bounding boxes"""
     x1, y1, w1, h1 = box1
     x2, y2, w2, h2 = box2
 
@@ -127,7 +127,7 @@ def open_device_auto(width: int, height: int, fps: int) -> cv2.VideoCapture:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         cap.set(cv2.CAP_PROP_FPS, float(fps))
         if cap.isOpened():
-            print(f"自动选择设备: /dev/video{idx}")
+            print(f"Auto-selected device: /dev/video{idx}")
             return cap
         cap.release()
 
@@ -180,14 +180,14 @@ def process_frame_data(prefix, data, slam_data, window_size, width, height, fps,
 
 class OptimizedSequentialVideoProcessor:
     """
-    优化的视频处理器 - 替代原SequentialVideoProcessor
+    Optimized video processor - replacement for the original SequentialVideoProcessor
     
-    主要改进:
-    1. 使用OptimizedStreamingInference替代StreamingInference
-    2. 自适应窗口大小
-    3. 更好的内存管理
-    4. 更详细的性能监控
-    5. ✅ 保存原始视频和每帧output
+    Main improvements:
+    1. Use OptimizedStreamingInference instead of StreamingInference
+    2. adaptive window sizing
+    3. better memory management
+    4. more detailed performance monitoring
+    5. ✅ save the original video and each frame output
     """
     def __init__(self, cfg, video_path, output_path, network, window_size,
                  calib=None, run_global=True, save_pkl=False, visualize=False, 
@@ -210,7 +210,7 @@ class OptimizedSequentialVideoProcessor:
         self.flip_select = flip_select  # 'all' | 'oblique' | 'interval'
         self.flip_interval = max(1, int(flip_interval))
         
-        # 设备初始化
+        # Device initialization
         self.is_realsense_camera = False
         self.is_fisheye_camera = False
         self.is_video_file = False
@@ -222,14 +222,14 @@ class OptimizedSequentialVideoProcessor:
         else:
             self._init_video_file(video_path)
         
-        # 初始化检测和特征提取器
+        # Initialize the detector and feature extractor
         self.detector = DetectionModel(cfg.DEVICE.lower())
         self.extractor = FeatureExtractor(cfg.DEVICE.lower(), cfg.FLIP_EVAL)
         
-        # 初始化action recognition
+        # Initialize action recognition
         self.action_recognizer = None
-        self.last_ntu_joints = None  # 用于可视化的 NTU 关键点
-        # 优先使用 TensorRT 引擎
+        self.last_ntu_joints = None  # NTU keypoints used for visualization
+        # Prefer the TensorRT engine when available
         if action_engine and os.path.exists(action_engine):
             try:
                 from lib.action_recognition_trt import ActionRecognizerTRT
@@ -240,7 +240,7 @@ class OptimizedSequentialVideoProcessor:
                     num_keypoints=25
                 )
                 
-                # 使用稳定化包装器
+                # Use the stabilization wrapper
                 from lib.action_recognition_stable import StableActionRecognizer
                 self.action_recognizer = StableActionRecognizer(
                     base_recognizer,
@@ -258,7 +258,7 @@ class OptimizedSequentialVideoProcessor:
                 logger.warning(f"Failed to initialize TensorRT action recognition: {e}")
                 self.action_recognizer = None
         
-        # 如果 TensorRT 不可用，回退到 PyTorch
+        # If TensorRT is unavailable, fall back to PyTorch
         if self.action_recognizer is None and action_config and action_checkpoint:
             try:
                 from lib.action_recognition import ActionRecognizer
@@ -271,7 +271,7 @@ class OptimizedSequentialVideoProcessor:
                     num_keypoints=17  # Default COCO format, will auto-detect from config
                 )
                 
-                # 使用稳定化包装器
+                # Use the stabilization wrapper
                 from lib.action_recognition_stable import StableActionRecognizer
                 self.action_recognizer = StableActionRecognizer(
                     base_recognizer,
@@ -293,7 +293,7 @@ class OptimizedSequentialVideoProcessor:
                 logger.warning(f"Failed to initialize action recognition: {e}")
                 self.action_recognizer = None
         
-        # 使用优化的流式推理器
+        # Use the optimized streaming inferencer
         self.stream_inference = OptimizedStreamingInference(
             network, 
             cfg.DEVICE.lower(),
@@ -307,9 +307,9 @@ class OptimizedSequentialVideoProcessor:
         logger.info(f"  - Window range: {min_window}-{max_window} frames")
         logger.info(f"  - Flip evaluation: {self.flip_eval} (real_time flip_eval=FLIP_EVAL, same as demo)")
         if self.flip_eval:
-            logger.info(f"  - Flip select: {self.flip_select} (all=每帧, oblique=仅斜侧角, interval=每N帧)")
+            logger.info(f"  - Flip select: {self.flip_select} (all=every frame, oblique=oblique frames only, interval=every N frames)")
 
-        # 翻转推理器（flip evaluation时使用）
+        # Flip inferencer (used during flip evaluation)
         if self.flip_eval:
             self.flipped_stream_inference = OptimizedStreamingInference(
                 network,
@@ -325,14 +325,14 @@ class OptimizedSequentialVideoProcessor:
         self.iou_threshold = 0.9
         logger.info(f"  - Feature Propagation enabled with IoU threshold: {self.iou_threshold}")
         
-        # ✅ 初始化结果存储 - 用于保存每帧output
+        # ✅ Initialize result storage for saving each frame output
         self.results = {}
-        self.frame_outputs = []  # 存储每一帧的output
+        self.frame_outputs = []  # store the output for each frame
         
-        # ✅ 初始化视频写入器（包括原始视频和skeleton视频）
+        # ✅ Initialize video writers for both the raw video and the skeleton video
         self._init_video_writer()
         
-        # 性能统计
+        # Performance statistics
         self.timing_stats = {
             'total': [],
             'tracking': [],
@@ -341,21 +341,21 @@ class OptimizedSequentialVideoProcessor:
             'inference': [],
             'visualization': []
         }
-        self.flip_mode_frames = 0   # 实际做了 flip 的帧数
-        self.normal_mode_frames = 0  # 仅单遍推理的帧数
+        self.flip_mode_frames = 0   # number of frames that actually used flip inference
+        self.normal_mode_frames = 0  # number of frames that used only a single-pass inference
 
-        # 输出平滑：OneEuroFilter 对 pose/shape/cam/root 做自适应时序平滑
-        self._oef_filters = {}  # 延迟初始化，首帧时按实际 shape 创建
+        # Output smoothing: apply OneEuroFilter-based adaptive temporal smoothing to pose/shape/cam/root
+        self._oef_filters = {}  # lazily initialize on the first frame using the actual shape
 
-        # bbox 平滑：消除检测器帧间 bbox 跳动（bbox 经投影放大后是 2D 抖动主因）
+        # bbox smoothing: suppress frame-to-frame bbox jitter from the detector (amplified by projection and a major source of 2D jitter)
         self._prev_smooth_bbox = None
-        self._bbox_smooth_alpha = 0.5  # bbox EMA 权重（当前帧）
+        self._bbox_smooth_alpha = 0.5  # bbox EMA weight for the current frame
 
-        # joints2d 平滑
+        # joints2d smoothing
         self._oef_joints2d = None
 
     def _init_realsense(self):
-        """初始化RealSense相机"""
+        """Initialize the RealSense camera"""
         import pyrealsense2 as rs
         self.is_realsense_camera = True
         self.pipeline = rs.pipeline()
@@ -377,7 +377,7 @@ class OptimizedSequentialVideoProcessor:
             raise
 
     def _init_fisheye(self):
-        """初始化Fisheye相机"""
+        """Initialize the fisheye camera"""
         import cv2
         self.is_fisheye_camera = True
         self.width = 1280
@@ -402,7 +402,7 @@ class OptimizedSequentialVideoProcessor:
         self.pipeline = None
 
     def _init_video_file(self, video_path):
-        """初始化视频文件"""
+        """Initialize the video file"""
         import cv2
         self.is_video_file = True
         self.cap = cv2.VideoCapture(video_path)
@@ -420,11 +420,11 @@ class OptimizedSequentialVideoProcessor:
         self.pipeline = None
 
     def _init_video_writer(self):
-        """✅ 初始化视频写入器 - 与 demo 一致使用 imageio+FFMPEG，避免 mp4v 导致输出无法播放"""
+        """✅ Initialize video writers using imageio+FFMPEG, matching demo behavior and avoiding mp4v playback issues"""
         import cv2
         is_camera = self.is_realsense_camera or self.is_fisheye_camera
         
-        # 与 demo.py / run_vis 一致：用 imageio FFMPEG 写 MP4，兼容性更好；否则回退到 cv2
+        # Match demo.py / run_vis by writing MP4 with imageio FFMPEG for better compatibility; otherwise fall back to cv2
         self._use_imageio_writer = IMAGEIO_AVAILABLE
         if self._use_imageio_writer:
             fps_float = float(self.fps)
@@ -464,14 +464,14 @@ class OptimizedSequentialVideoProcessor:
             self.output_skeleton_video = None
 
     def _write_raw_frame(self, frame):
-        """写一帧到原始视频（内部根据 imageio/cv2 做 BGR→RGB 转换）"""
+        """Write one frame to the raw video, converting BGR to RGB internally when needed"""
         if self._use_imageio_writer:
             self.output_raw_video.append_data(frame[..., ::-1].copy())  # BGR -> RGB
         else:
             self.output_raw_video.write(frame)
 
     def _write_skeleton_frame(self, img):
-        """写一帧到 skeleton 视频（img 为 BGR）"""
+        """Write one frame to the skeleton video (img is BGR)"""
         if self.output_skeleton_video is None:
             return
         if self._use_imageio_writer:
@@ -480,7 +480,7 @@ class OptimizedSequentialVideoProcessor:
             self.output_skeleton_video.write(img)
 
     def _read_frame(self, frame_idx):
-        """读取帧"""
+        """Read a frame"""
         import numpy as np
         
         if self.is_realsense_camera:
@@ -502,59 +502,59 @@ class OptimizedSequentialVideoProcessor:
 
     def _render_ntu_skeleton(self, img, ntu_joints_2d, color=(0, 255, 255)):
         """
-        渲染 NTU RGB+D 25 关键点骨架
+        Render the NTU RGB+D 25-joint skeleton
         
-        NTU 25 骨架连接:
-        躯干: 0-1-20-2-3 (spine)
-        左臂: 20-4-5-6-7, 7-21, 7-22 (hand tips)
-        右臂: 20-8-9-10-11, 11-23, 11-24 (hand tips)
-        左腿: 0-12-13-14-15
-        右腿: 0-16-17-18-19
+        NTU 25 skeleton connections:
+        torso: 0-1-20-2-3 (spine)
+        left arm: 20-4-5-6-7, 7-21, 7-22 (hand tips)
+        right arm: 20-8-9-10-11, 11-23, 11-24 (hand tips)
+        left leg: 0-12-13-14-15
+        right leg: 0-16-17-18-19
         """
         import cv2
         
-        # NTU 骨架连接
+        # NTU skeleton connections
         ntu_skeleton = [
-            # 躯干
+            # torso
             (0, 1), (1, 20), (20, 2), (2, 3),
-            # 左臂
+            # left arm
             (20, 4), (4, 5), (5, 6), (6, 7), (7, 21), (7, 22),
-            # 右臂
+            # right arm
             (20, 8), (8, 9), (9, 10), (10, 11), (11, 23), (11, 24),
-            # 左腿
+            # left leg
             (0, 12), (12, 13), (13, 14), (14, 15),
-            # 右腿
+            # right leg
             (0, 16), (16, 17), (17, 18), (18, 19),
         ]
         
         h, w = img.shape[:2]
         
-        # 绘制骨架连线
+        # Draw skeleton connections
         for start_idx, end_idx in ntu_skeleton:
             if start_idx < len(ntu_joints_2d) and end_idx < len(ntu_joints_2d):
                 pt1 = ntu_joints_2d[start_idx]
                 pt2 = ntu_joints_2d[end_idx]
                 
-                # 检查点是否在有效范围内
+                # Check whether the points are in a valid range
                 if (0 <= pt1[0] < w and 0 <= pt1[1] < h and 
                     0 <= pt2[0] < w and 0 <= pt2[1] < h):
                     cv2.line(img, (int(pt1[0]), int(pt1[1])), 
                             (int(pt2[0]), int(pt2[1])), color, 2)
         
-        # 绘制关键点
+        # Draw keypoints
         for i, pt in enumerate(ntu_joints_2d):
             if 0 <= pt[0] < w and 0 <= pt[1] < h:
-                # 不同部位使用不同颜色
-                if i in [0, 1, 2, 3, 20]:  # 躯干
-                    pt_color = (0, 255, 0)  # 绿色
-                elif i in [4, 5, 6, 7, 21, 22]:  # 左臂
-                    pt_color = (255, 0, 0)  # 蓝色
-                elif i in [8, 9, 10, 11, 23, 24]:  # 右臂
-                    pt_color = (0, 0, 255)  # 红色
-                elif i in [12, 13, 14, 15]:  # 左腿
-                    pt_color = (255, 255, 0)  # 青色
-                else:  # 右腿
-                    pt_color = (255, 0, 255)  # 紫色
+                # Use different colors for different body parts
+                if i in [0, 1, 2, 3, 20]:  # torso
+                    pt_color = (0, 255, 0)  # green
+                elif i in [4, 5, 6, 7, 21, 22]:  # left arm
+                    pt_color = (255, 0, 0)  # blue
+                elif i in [8, 9, 10, 11, 23, 24]:  # right arm
+                    pt_color = (0, 0, 255)  # red
+                elif i in [12, 13, 14, 15]:  # left leg
+                    pt_color = (255, 255, 0)  # cyan
+                else:  # right leg
+                    pt_color = (255, 0, 255)  # magenta
                 
                 cv2.circle(img, (int(pt[0]), int(pt[1])), 4, pt_color, -1)
                 cv2.circle(img, (int(pt[0]), int(pt[1])), 5, (255, 255, 255), 1)
@@ -562,7 +562,7 @@ class OptimizedSequentialVideoProcessor:
         return img
 
     def _visualize_frame(self, frame, frame_idx, joints2d, action_label=None, action_confidence=None, ntu_joints_2d=None):
-        """可视化当前帧"""
+        """Visualize the current frame"""
         if not self.visualize:
             return frame
         
@@ -576,37 +576,37 @@ class OptimizedSequentialVideoProcessor:
         
         img = frame.copy()
         
-        # 使用网络输出的 joints2d 绘制骨架（与 demo 一致，WHAM 前17关节为 COCO 格式）
+        # Draw the skeleton using the network-produced joints2d, matching the demo behavior (the first 17 WHAM joints follow the COCO format)
         joints2d_tensor = torch.from_numpy(joints2d).float().to(self.cfg.DEVICE)
         j2d = joints2d_tensor.reshape(-1, 2)
         n_j = min(17, j2d.shape[0])  # COCO 17 joints
         img = render_skeleton(j2d[:n_j], img)
         
-        # 显示action label - 更明显的显示效果
+        # Display the action label with a more visible style
         if self.action_recognizer is not None:
             buffer_size = self.action_recognizer.get_buffer_size()
             
             if action_label and action_confidence is not None:
-                # 显示action label和置信度
+                # Display the action label and confidence
                 label_text = f"Action: {action_label}"
                 confidence_text = f"Confidence: {action_confidence:.2f}"
                 
-                # 绘制背景矩形以提高可读性
+                # Draw a background rectangle to improve readability
                 (text_width, text_height), baseline = cv2.getTextSize(
                     label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
                 cv2.rectangle(img, (5, 5), (text_width + 15, text_height * 2 + baseline + 20), 
-                            (0, 0, 0), -1)  # 黑色半透明背景
+                            (0, 0, 0), -1)  # semi-transparent black background
                 cv2.rectangle(img, (5, 5), (text_width + 15, text_height * 2 + baseline + 20), 
-                            (0, 255, 0), 2)  # 绿色边框
+                            (0, 255, 0), 2)  # green outline
                 
-                # 显示action label（绿色，较大字体）
+                # Display the action label in green using a larger font
                 cv2.putText(img, label_text, (10, 35), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-                # 显示置信度（黄色）
+                # Display the confidence in yellow
                 cv2.putText(img, confidence_text, (10, 60), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
             else:
-                # 显示缓冲状态
+                # Display the buffer status
                 status_text = f"Action Recognition: Buffering ({buffer_size}/{self.action_recognizer.window_size} frames)"
                 cv2.putText(img, status_text, (10, 30), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
@@ -614,7 +614,7 @@ class OptimizedSequentialVideoProcessor:
         return img
 
     def _print_timing_stats(self, frame_idx):
-        """打印计时统计"""
+        """Print timing statistics"""
         if frame_idx % 30 == 0 and frame_idx > 0:
             logger.info(f"\n{'='*60}")
             logger.info(f"Frame {frame_idx} Performance Metrics")
@@ -628,7 +628,7 @@ class OptimizedSequentialVideoProcessor:
             self.stream_inference.print_stats()
 
     def run(self):
-        """运行视频处理"""
+        """Run video processing"""
         import cv2
         from progress.bar import Bar
         import numpy as np
@@ -648,11 +648,11 @@ class OptimizedSequentialVideoProcessor:
         if self.flip_eval:
             logger.info(f"real_time FLIP_EVAL enabled: two forward passes per frame, then average (same as demo --visualize flip)")
 
-        # 主处理循环
+        # Main processing loop
         while frame_idx < self.length:
             frame_start_time = time.time()
             
-            # 读取帧
+            # Read a frame
             ret, frame = self._read_frame(frame_idx)
             if not ret or frame is None:
                 if is_camera:
@@ -661,10 +661,10 @@ class OptimizedSequentialVideoProcessor:
                 else:
                     break
             
-            # ✅ 保存原始帧（无skeleton）
+            # ✅ Save the raw frame without a skeleton overlay
             self._write_raw_frame(frame)
             
-            # 跟踪检测
+            # Tracking detection
             track_start = time.time()
             self.detector.track(frame, self.fps, self.length, use_full_frame_fallback=True)
             
@@ -679,7 +679,7 @@ class OptimizedSequentialVideoProcessor:
             track_end = time.time()
             self.timing_stats['tracking'].append(track_end - track_start)
             
-            # 特征提取
+            # Feature extraction
             subject_id = self.detector.tracking_results['id'][-1]
             if frame_idx//skip not in tracking_results[subject_id]['frame_id']:
                 logger.warning(f"No tracking results for frame {frame_idx}")
@@ -741,7 +741,7 @@ class OptimizedSequentialVideoProcessor:
             feat_end = time.time()
             self.timing_stats['feature_extraction'].append(feat_end - feat_start)
             
-            # 数据处理
+            # Data processing
             data_start = time.time()
             current_slam_data = slam_results[:frame_idx] if frame_idx < len(slam_results) else np.array([0, 0, 0, 1, 0, 0, 0])
             subject_data = tracking_results[subject_id]
@@ -750,7 +750,7 @@ class OptimizedSequentialVideoProcessor:
                 batch = self._process_frame_data(subject_data, current_slam_data)
                 x, features, mask, cam_angvel, frame_id, kwargs = batch
                 
-                # 保存 kwargs 用于后续投影
+                # Store kwargs for later projection
                 self.current_kwargs = kwargs
                 
                 if 'init_global_orient' not in subject_data:
@@ -762,7 +762,7 @@ class OptimizedSequentialVideoProcessor:
             data_end = time.time()
             self.timing_stats['data_processing'].append(data_end - data_start)
             
-            # 推理
+            # Inference
             infer_start = time.time()
             with torch.no_grad():
                 output = self.stream_inference.process_frame(
@@ -779,7 +779,7 @@ class OptimizedSequentialVideoProcessor:
                     subject_id=subject_id
                 )
 
-                # Flip evaluation: 仅对选中帧做 flip（all=每帧, oblique=斜侧角, interval=每N帧）
+                # Flip evaluation: apply flip only on selected frames (all=every frame, oblique=oblique frames, interval=every N frames)
                 if self.flip_eval:
                     do_flip = self._should_do_flip_for_frame(frame_idx, subject_data)
                     flip_keys = ('flipped_keypoints', 'flipped_bbox', 'flipped_features')
@@ -787,7 +787,7 @@ class OptimizedSequentialVideoProcessor:
                     if frame_idx == 0 or frame_idx % 100 == 0:
                         logger.debug(f"Frame {frame_idx} flip_eval: do_flip={do_flip}, has_flipped={has_flipped}")
                     if not do_flip:
-                        # 本帧不做 flip，直接用 normal output
+                        # Do not flip this frame; use the normal output directly
                         self.normal_mode_frames += 1
                     elif not has_flipped:
                         self.normal_mode_frames += 1
@@ -799,10 +799,10 @@ class OptimizedSequentialVideoProcessor:
                         flipped_batch = self._process_flipped_frame_data(subject_data, current_slam_data)
                         fx, f_features, f_mask, f_cam_angvel, f_frame_id, f_kwargs = flipped_batch
 
-                        # flip 无上一帧信息时：不复用 normal，直接从 extractor.predict_init 取 flipped init
+                        # When flip mode has no previous-frame state, do not reuse the normal state; get the flipped init directly from extractor.predict_init
                         has_flip_prev = self.flipped_stream_inference.prev_output is not None
                         if not has_flip_prev:
-                            # 每次 flip stream 没有上一帧时都重新 predict_init，不复用旧的或 normal 的信息
+                            # Whenever the flip stream has no previous frame, recompute predict_init instead of reusing old or normal-stream information
                             tracking_results = self._predict_flipped_init(frame, frame_idx // skip, subject_id, tracking_results)
                             subject_data = tracking_results[subject_id]  # refresh after predict_init
 
@@ -811,10 +811,10 @@ class OptimizedSequentialVideoProcessor:
                         else:
                             f_inits, f_init_root = self._make_fallback_init(fx)
 
-                        # 保存 normal pred_cam（stream_flip 用 cam[0:1] 投影平均 pose）
+                        # Store the normal pred_cam because stream_flip uses cam[0:1] to project the averaged pose
                         normal_pred_cam = self.network.pred_cam.clone()
 
-                        # flip 有上一帧时直接用 flipped stream 自己的 hidden state 等，无需从 normal 复制
+                        # If the flip stream already has a previous frame, reuse its own hidden states instead of copying from the normal stream
                         flipped_output = self.flipped_stream_inference.process_frame(
                             fx, f_inits,
                             window_size=self.window_size,
@@ -842,28 +842,28 @@ class OptimizedSequentialVideoProcessor:
                         avg_pose = avg_pose.reshape(-1, 144)
                         avg_contact = (flipped_output['contact'][..., [2, 3, 0, 1]] + output['contact']) / 2
 
-                        # 用 normal 的 pred_cam 投影（与 stream_flip _handle_flip_eval 一致）
+                        # Project with the normal pred_cam, matching stream_flip._handle_flip_eval
                         self.network.pred_cam = normal_pred_cam
                         self.network.pred_pose = avg_pose.view_as(self.network.pred_pose)
                         self.network.pred_shape = avg_shape.view_as(self.network.pred_shape)
                         self.network.pred_contact = avg_contact.view_as(self.network.pred_contact)
-                        # 单帧预测时只传最后一帧的 bbox/cam_intrinsics，否则投影位置错误
+                        # During single-frame prediction, pass only the last frame's bbox/cam_intrinsics; otherwise the projection location becomes incorrect
                         smpl_kwargs = dict(kwargs)
                         if kwargs.get('bbox') is not None and kwargs['bbox'].shape[1] > 1:
                             smpl_kwargs['bbox'] = kwargs['bbox'][:, -1:, :]
                         if kwargs.get('cam_intrinsics') is not None and kwargs['cam_intrinsics'].dim() == 4 and kwargs['cam_intrinsics'].shape[1] > 1:
                             smpl_kwargs['cam_intrinsics'] = kwargs['cam_intrinsics'][:, -1:, :, :]
                         output = self.network.forward_smpl(**smpl_kwargs)
-                        # 融合 view-independent hidden states (motion_encoder, motion_decoder)
-                        # 让 normal stream 后续帧受益于 flip 的运动信息，同时不干扰 view-dependent 状态
+                        # Merge the view-independent hidden states (motion_encoder, motion_decoder)
+                        # Let later normal-stream frames benefit from motion information learned in flip mode without disturbing view-dependent state
                         self.stream_inference.fuse_view_independent_states(
                             self.flipped_stream_inference, alpha=0.7
                         )
                 else:
-                    # 未开启 flip_eval，全部为 normal 模式
+                    # When flip_eval is disabled, run everything in normal mode
                     self.normal_mode_frames += 1
-                # ---- 时序平滑：OneEuroFilter on pose, shape, cam, root ----
-                # 自适应滤波：快动作少平滑（减少滞后），慢动作多平滑（消除抖动）
+                # ---- Temporal smoothing: OneEuroFilter on pose, shape, cam, and root ----
+                # Adaptive filtering: smooth fast motion less to reduce lag, and smooth slow motion more to suppress jitter
                 smooth_targets = {
                     'pose':  self.network.pred_pose,
                     'shape': self.network.pred_shape,
@@ -875,7 +875,7 @@ class OptimizedSequentialVideoProcessor:
                 for key, tensor in smooth_targets.items():
                     arr = tensor.detach().cpu().numpy().flatten().astype(np.float64)
                     if key not in self._oef_filters:
-                        # 首帧：初始化滤波器，不滤波
+                        # First frame: initialize the filter without filtering
                         self._oef_filters[key] = _OneEuroFilterGeneric(
                             x0=arr,
                             min_cutoff=1.0,
@@ -887,7 +887,7 @@ class OptimizedSequentialVideoProcessor:
                     smoothed = torch.from_numpy(arr.reshape(tensor.shape)).float().to(tensor.device)
                     setattr(self.network, 'pred_' + key, smoothed)
 
-                # 用平滑后的参数重新生成 SMPL output
+                # Rebuild the SMPL output using the smoothed parameters
                 smpl_kwargs_smooth = dict(kwargs)
                 if kwargs.get('bbox') is not None and kwargs['bbox'].shape[1] > 1:
                     smpl_kwargs_smooth['bbox'] = kwargs['bbox'][:, -1:, :]
@@ -941,18 +941,18 @@ class OptimizedSequentialVideoProcessor:
                 ntu_joints = self.network.smpl.get_ntu_joints(vertices_tensor)  # (1, 25, 3)
                 ntu_joints = ntu_joints[0].cpu().numpy()  # (25, 3)
                 
-                # 验证 NTU joints 形状
+                # Validate the NTU joints shape
                 assert ntu_joints.shape == (25, 3), f"Expected NTU joints shape (25, 3), got {ntu_joints.shape}"
                 
-                # 检查 NTU joints 是否有效（非零、非NaN）
+                # Check whether NTU joints are valid (non-zero and non-NaN)
                 if not (np.isnan(ntu_joints).any() or np.isinf(ntu_joints).any()):
-                    # 保存 NTU joints 用于可视化（无论是否有 action_recognizer）
+                    # Save NTU joints for visualization regardless of whether action_recognizer is enabled
                     self.last_ntu_joints = ntu_joints.copy()
                 else:
                     logger.debug(f"Frame {frame_idx}: Invalid NTU joints (NaN/Inf detected), keeping previous joints for visualization")
             except Exception as e:
                 logger.debug(f"Error extracting NTU joints: {e}")
-                # 保持之前的 last_ntu_joints，不设置为 None
+                # Keep the previous last_ntu_joints instead of resetting it to None
             
             # Action recognition
             action_label = None
@@ -961,13 +961,13 @@ class OptimizedSequentialVideoProcessor:
                 try:
                     ntu_joints = self.last_ntu_joints
                     
-                    # 检查 NTU joints 是否有效（非零、非NaN）
+                    # Check whether NTU joints are valid (non-zero and non-NaN)
                     if np.isnan(ntu_joints).any() or np.isinf(ntu_joints).any():
                         logger.warning(f"Frame {frame_idx}: Invalid NTU joints (NaN/Inf detected), skipping HAR prediction")
                         action_label = None
                         action_confidence = None
                     else:
-                        # 每50帧打印一次 NTU skeleton 和 buffer 状态
+                        # Print NTU skeleton and buffer status every 50 frames
                         if frame_idx % 50 == 0:
                             buffer_size = self.action_recognizer.get_buffer_size()
                             joints_range = (ntu_joints.min(), ntu_joints.max())
@@ -978,32 +978,32 @@ class OptimizedSequentialVideoProcessor:
                             logger.info(f"  Joints range: [{joints_range[0]:.3f}, {joints_range[1]:.3f}]")
                             logger.info(f"  Pelvis: {pelvis}, Head: {head}")
                         
-                        # 实时更新 buffer：每帧都将当前的 NTU 3D skeleton 添加到 buffer
-                        # predict_action 内部会调用 add_skeleton_frame，确保 buffer 实时更新
+                        # Update the buffer in real time by appending the current NTU 3D skeleton every frame
+                        # predict_action internally calls add_skeleton_frame to keep the buffer updated in real time
                         buffer_size_before = self.action_recognizer.get_buffer_size()
                         class_idx, confidence, label = self.action_recognizer.predict_action(ntu_joints)
                         buffer_size_after = self.action_recognizer.get_buffer_size()
                         
-                        # 验证 buffer 已更新
+                        # Verify that the buffer has been updated
                         if buffer_size_after != buffer_size_before + 1 and buffer_size_after < self.action_recognizer.window_size:
                             logger.warning(f"Frame {frame_idx}: Buffer may not have updated correctly: {buffer_size_before} -> {buffer_size_after}")
                         
-                        # 统计信息：每100帧记录一次 buffer 更新情况
+                        # Statistics: log buffer updates every 100 frames
                         if frame_idx % 100 == 0:
                             logger.info(f"Frame {frame_idx}: Buffer real-time update confirmed - size={buffer_size_after}/{self.action_recognizer.window_size}")
                     
-                        # 无论 class_idx 是否 >= 0，只要有有效的 label 就显示
-                        # class_idx == -1 表示 rate limiting 或 buffering，但 label 仍然是上一次的预测结果
+                        # Display the label whenever it is valid, even if class_idx < 0
+                        # class_idx == -1 indicates rate limiting or buffering, but the label still contains the previous prediction
                         if "buffering" in label:
-                            # 正在缓冲中，不显示 label
+                            # Still buffering; do not display the label
                             action_label = None
                             action_confidence = None
                         elif label and label not in ["waiting...", "rate_limiting", "insufficient_frames"]:
-                            # 有有效的 action label，保持显示
+                            # A valid action label is available, so keep displaying it
                             action_label = label
                             action_confidence = confidence
                             
-                            # 首次成功预测时记录日志
+                            # Log the first successful prediction
                             if not hasattr(self, '_har_first_prediction_logged'):
                                 logger.info(f"Frame {frame_idx}: First HAR prediction using NTU-25 3D skeleton")
                                 logger.info(f"  Action: {action_label}, Confidence: {action_confidence:.4f}")
@@ -1014,7 +1014,7 @@ class OptimizedSequentialVideoProcessor:
                     import traceback
                     logger.debug(traceback.format_exc())
             
-            # ✅ 保存当前帧的output
+            # ✅ Save the output of the current frame
             frame_output = {
                 'frame_idx': frame_idx,
                 'subject_id': subject_id,
@@ -1026,17 +1026,17 @@ class OptimizedSequentialVideoProcessor:
                 'action_confidence': action_confidence
             }
             
-            # 保存 NTU 3D skeleton 用于验证
+            # Save the NTU 3D skeleton for validation
             if hasattr(self, 'last_ntu_joints') and self.last_ntu_joints is not None:
                 frame_output['ntu_joints_3d'] = self.last_ntu_joints  # (25, 3)
                 frame_output['ntu_joints_shape'] = self.last_ntu_joints.shape
             
             self.frame_outputs.append(frame_output)
             
-            # 可视化
+            # Visualization
             viz_start = time.time()
             joints2d_raw = output['joints2d'][:, [-1]].cpu().numpy()
-            # joints2d 平滑：最终渲染用，消除残余 2D 投影抖动
+            # joints2d smoothing: apply at final rendering time to suppress residual 2D projection jitter
             j2d_flat = joints2d_raw.flatten().astype(np.float64)
             if self._oef_joints2d is None:
                 self._oef_joints2d = _OneEuroFilterGeneric(
@@ -1045,42 +1045,42 @@ class OptimizedSequentialVideoProcessor:
             else:
                 joints2d = self._oef_joints2d(j2d_flat).reshape(joints2d_raw.shape).astype(np.float32)
             
-            # 获取 NTU 3D 关键点并投影到 2D
-            # 方法：直接复用网络已经计算好的 full_joints2d 的投影参数
+            # Get NTU 3D keypoints and project them to 2D
+            # Method: directly reuse the full_joints2d projection parameters already computed by the network
             ntu_joints_2d = None
             if hasattr(self, 'last_ntu_joints') and self.last_ntu_joints is not None:
                 try:
-                    # 网络的 joints2d 来源: output['joints2d'] = self.output.full_joints2d
+                    # The network's joints2d come from output['joints2d'] = self.output.full_joints2d
                     # full_joints2d shape: (batch, T, J, 2)
-                    # 我们在 line 903 用 joints2d = output['joints2d'][:, [-1]] 取最后帧
+                    # At line 903 we use joints2d = output['joints2d'][:, [-1]] to take the last frame
                     #
-                    # joints2d 的计算过程 (smpl.py line 97):
+                    # joints2d computation path (smpl.py line 97):
                     #   joints3d shape: (batch, T, J, 3)
-                    #   full_cam shape: (batch, T, 3)  -- 在 reshape 前
+                    #   full_cam shape: (batch, T, 3) before reshape
                     #   cam_intrinsics shape: (batch, T, 3, 3)
                     #   full_joints2d = full_perspective_projection(joints3d, cam_intrinsics, translation=full_cam)
                     #
-                    # 然后 output.full_cam = full_cam.reshape(-1, 3) 存储
+                    # Then store output.full_cam = full_cam.reshape(-1, 3)
                     #
-                    # 对于 NTU joints，最可靠的方式是直接用 vertices 在相机坐标系下的位置
-                    # 因为 vertices 和 joints3d 在同一坐标系下，用同样的投影即可
+                    # For NTU joints, the most reliable approach is to use the vertex positions directly in camera coordinates
+                    # Because vertices and joints3d share the same coordinate system, the same projection can be reused
 
                     from lib.models.smpl import full_perspective_projection
 
-                    # 获取 full_joints2d 的形状来确定 T
+                    # Use the shape of full_joints2d to determine T
                     full_joints2d = output['joints2d']  # (batch, T, J, 2)
                     T = full_joints2d.shape[1]
 
-                    # full_cam: (batch*T, 3) → reshape 回 (batch, T, 3) → 取最后一帧
+                    # full_cam: (batch*T, 3) -> reshape back to (batch, T, 3) -> take the last frame
                     full_cam = self.network.output.full_cam  # (batch*T, 3)
                     full_cam = full_cam.reshape(-1, T, 3)  # (batch, T, 3)
                     last_cam = full_cam[:, -1:, :]  # (batch, 1, 3)
 
-                    # cam_intrinsics: (batch, T, 3, 3) → 取最后一帧
+                    # cam_intrinsics: (batch, T, 3, 3) -> take the last frame
                     cam_intrinsics = kwargs['cam_intrinsics']  # (batch, T, 3, 3)
                     last_intrinsics = cam_intrinsics[:, -1:, :, :]  # (batch, 1, 3, 3)
 
-                    # NTU joints 3D → (batch, 1, 25, 3) 与 last_cam (batch, 1, 3) 对齐
+                    # NTU joints 3D -> (batch, 1, 25, 3), aligned with last_cam (batch, 1, 3)
                     ntu_joints_3d = torch.from_numpy(self.last_ntu_joints).float().to(self.device)
                     ntu_joints_3d = ntu_joints_3d.unsqueeze(0).unsqueeze(0)  # (1, 1, 25, 3)
 
@@ -1091,7 +1091,7 @@ class OptimizedSequentialVideoProcessor:
                     )[0, 0].cpu().numpy()  # (25, 2)
 
                     if frame_idx % 30 == 0:
-                        j2d_last = full_joints2d[0, -1].cpu().numpy()  # (J, 2) 最后一帧所有关节
+                        j2d_last = full_joints2d[0, -1].cpu().numpy()  # (J, 2) all joints in the last frame
                         logger.info(f"Frame {frame_idx}: NTU projection debug")
                         logger.info(f"  vertices shape: {self.network.output.vertices.shape}")
                         logger.info(f"  full_cam shape: {self.network.output.full_cam.shape}, T={T}")
@@ -1102,7 +1102,7 @@ class OptimizedSequentialVideoProcessor:
                         logger.info(f"  ntu_joints_2d range: x=[{ntu_joints_2d[:,0].min():.0f},{ntu_joints_2d[:,0].max():.0f}] y=[{ntu_joints_2d[:,1].min():.0f},{ntu_joints_2d[:,1].max():.0f}]")
                         logger.info(f"  joints2d (nose) 2D: {j2d_last[0]}")
                         logger.info(f"  joints2d range: x=[{j2d_last[:,0].min():.0f},{j2d_last[:,0].max():.0f}] y=[{j2d_last[:,1].min():.0f},{j2d_last[:,1].max():.0f}]")
-                        # 验证：用相同方法投影 network joints3d
+                        # Validation: project network joints3d using the same method
                         net_joints3d = self.network.output.joints.reshape(-1, T, 31, 3)[:, -1:, :, :]  # (batch, 1, 31, 3)
                         verify_2d = full_perspective_projection(
                             net_joints3d[0:1], last_intrinsics, translation=last_cam
@@ -1126,20 +1126,20 @@ class OptimizedSequentialVideoProcessor:
             viz_end = time.time()
             self.timing_stats['visualization'].append(viz_end - viz_start)
             
-            # ✅ 保存skeleton视频
+            # ✅ Save the skeleton video
             self._write_skeleton_frame(img)
             
-            # 总时间
+            # Total time
             frame_time = time.time() - frame_start_time
             self.timing_stats['total'].append(frame_time)
             
-            # 打印统计
+            # Print statistics
             self._print_timing_stats(frame_idx)
             
             frame_idx += skip
             bar.next()
             
-            # 定期清理缓存
+            # Periodically clear caches
             if frame_idx % 100 == 0:
                 self.stream_inference.clear_cache()
             
@@ -1149,13 +1149,13 @@ class OptimizedSequentialVideoProcessor:
         
         bar.finish()
         
-        # ✅ 保存所有帧的output到pkl文件
+        # ✅ Save all frame outputs to a pkl file
         self._save_frame_outputs()
         
-        # 清理资源
+        # Release resources
         self._cleanup()
         
-        # 最终统计
+        # Final statistics
         logger.info(f"\nTotal processing time: {time.time() - start_total:.2f}s")
         self.stream_inference.print_stats()
         if self.flip_eval:
@@ -1165,13 +1165,13 @@ class OptimizedSequentialVideoProcessor:
         return self.results
 
     def _save_frame_outputs(self):
-        """✅ 保存所有帧的output到pkl文件"""
+        """✅ Save all frame outputs to a pkl file"""
         if len(self.frame_outputs) > 0:
             output_pkl_path = os.path.join(self.output_path, "frame_outputs.pkl")
             joblib.dump(self.frame_outputs, output_pkl_path)
             logger.info(f"Saved {len(self.frame_outputs)} frame outputs to: {output_pkl_path}")
             
-            # 同时保存一个更易读的总结文件
+            # Also save a more readable summary file
             summary_path = os.path.join(self.output_path, "output_summary.txt")
             with open(summary_path, 'w') as f:
                 f.write(f"Total frames processed: {len(self.frame_outputs)}\n")
@@ -1186,7 +1186,7 @@ class OptimizedSequentialVideoProcessor:
             logger.info(f"Saved summary to: {summary_path}")
 
     def _handle_no_detection(self, frame, is_camera):
-        """处理无检测情况"""
+        """Handle the no-detection case"""
         import cv2
         img = frame.copy()
         if self.visualize:
@@ -1199,7 +1199,7 @@ class OptimizedSequentialVideoProcessor:
         return img
 
     def _handle_tracking_lost(self, frame, is_camera):
-        """处理跟踪丢失情况"""
+        """Handle lost-tracking cases"""
         import cv2
         img = frame.copy()
         if self.visualize:
@@ -1212,7 +1212,7 @@ class OptimizedSequentialVideoProcessor:
         return img
 
     def _process_frame_data(self, subject_data, slam_data):
-        """处理帧数据"""
+        """Process frame data"""
         from lib.data.datasets.dataset_custom import convert_dpvo_to_cam_angvel
         from lib.data.utils.normalizer import Normalizer
         from lib.utils.imutils import compute_cam_intrinsics
@@ -1223,8 +1223,8 @@ class OptimizedSequentialVideoProcessor:
         mask = kp2d[..., -1] < 0.3
         bbox = torch.from_numpy(subject_data['bbox'][-self.window_size:]).float()
 
-        # bbox 平滑：对最后一帧的 bbox 做 EMA，消除检测器帧间跳动
-        # bbox 经 convert_pare_to_full_img_cam 会放大到 full_cam，是 2D 抖动的主要来源
+        # bbox smoothing: apply EMA to the last-frame bbox to suppress detector jitter
+        # bbox values are amplified into full_cam by convert_pare_to_full_img_cam, making them a main source of 2D jitter
         cur_bbox = bbox[-1:].clone()  # [1, 3] (cx, cy, scale)
         if self._prev_smooth_bbox is not None:
             smooth_bbox = self._bbox_smooth_alpha * cur_bbox + (1 - self._bbox_smooth_alpha) * self._prev_smooth_bbox
@@ -1246,11 +1246,11 @@ class OptimizedSequentialVideoProcessor:
                 {'cam_intrinsics': tt(intrinsics), 'bbox': tt(bbox), 'res': tt(res)})
 
     def _should_do_flip_for_frame(self, frame_idx, subject_data):
-        """判断当前帧是否需要做 flip（仅部分帧 flip 以节省计算）
+        """Decide whether the current frame should use flip evaluation (only some frames flip to save compute)
 
-        oblique 模式使用 view_encoder 风格的 3D 几何特征判断：
-        - 髋部/肩部宽度向量的 z 分量（深度差）反映身体旋转程度
-        - 左右深度差越大，说明身体越偏向斜侧角，flip 越有价值
+        Oblique mode uses view_encoder-style 3D geometric features:
+        - The z components of the hip/shoulder width vectors reflect body rotation
+        - The larger the left-right depth gap, the more oblique the body is and the more useful flip becomes
         """
         if not self.flip_eval:
             return False
@@ -1259,13 +1259,13 @@ class OptimizedSequentialVideoProcessor:
         if self.flip_select == 'interval':
             return (frame_idx % self.flip_interval) == 0
         if self.flip_select == 'oblique':
-            # 用 pred_kp3d 的 3D 几何特征判断是否为斜侧角
-            # 与 MinimalViewEncoder 使用相同的关节索引和特征思路
+            # Use 3D geometry from pred_kp3d to determine whether the pose is oblique
+            # Reuse the same joint indices and feature logic as MinimalViewEncoder
             try:
                 pred_kp3d = getattr(self.network, 'pred_kp3d', None)
                 if pred_kp3d is None:
                     return False
-                # pred_kp3d: [B, T, J, 3], 取最后一帧
+                # pred_kp3d: [B, T, J, 3], taking the last frame
                 kp3d = pred_kp3d[0, -1]  # [J, 3]
                 if kp3d.shape[0] < 13:
                     return False
@@ -1275,25 +1275,25 @@ class OptimizedSequentialVideoProcessor:
                 left_shoulder = kp3d[5]   # [3]
                 right_shoulder = kp3d[6]  # [3]
 
-                # 髋部和肩部的左右深度差（z分量差异）
-                # 正面/背面时深度差接近0，斜侧角时深度差明显
+                # left-right depth difference of hips and shoulders (difference in z values)
+                # Front/back views yield near-zero depth gaps, while oblique views produce clear depth gaps
                 hip_depth_diff = abs(float(left_hip[2] - right_hip[2]))
                 shoulder_depth_diff = abs(float(left_shoulder[2] - right_shoulder[2]))
 
-                # 用髋部宽度作为归一化参考（避免距离远近影响）
+                # Use hip width as a normalization reference to avoid distance bias
                 hip_width = float(torch.norm(left_hip - right_hip)) + 1e-6
 
-                # 深度不对称比例：depth_diff / width 近似 sin(旋转角)
+                # Depth asymmetry ratio: depth_diff / width approximates sin(rotation_angle)
                 oblique_ratio = (hip_depth_diff + shoulder_depth_diff) / (2.0 * hip_width)
 
-                # oblique_ratio > 0.3 大约对应旋转角 > ~17°，视为斜侧角
+                # oblique_ratio > 0.3 roughly corresponds to a rotation angle above ~17°, which is treated as oblique
                 return oblique_ratio > 0.3
             except Exception:
                 return False
         return False
 
     def _process_flipped_frame_data(self, subject_data, slam_data):
-        """处理翻转帧数据（用于flip evaluation）"""
+        """Process flipped frame data for flip evaluation"""
         from lib.data.datasets.dataset_custom import convert_dpvo_to_cam_angvel
         from lib.data.utils.normalizer import Normalizer
         from lib.utils.imutils import compute_cam_intrinsics
@@ -1324,7 +1324,7 @@ class OptimizedSequentialVideoProcessor:
                 {'cam_intrinsics': tt(intrinsics), 'bbox': tt(bbox), 'res': tt(res)})
 
     def _process_init(self, subject_data, norm_kp2d):
-        """处理初始化"""
+        """Process initialization"""
         from lib.utils.kp_utils import root_centering
         from lib.utils import transforms
 
@@ -1346,7 +1346,7 @@ class OptimizedSequentialVideoProcessor:
         return (init_kp, init_smpl), init_root
 
     def _predict_flipped_init(self, frame, frame_id, subject_id, tracking_results):
-        """flip 无上一帧时，用 extractor.predict_init 获取 flipped init（优先 extractor_engine）"""
+        """When flip mode has no previous frame, use extractor.predict_init to get the flipped init (preferring extractor_engine)"""
         from lib.models.preproc.backbone.utils import process_image
         subject_data = tracking_results[subject_id]
         if frame_id not in subject_data['frame_id']:
@@ -1357,12 +1357,12 @@ class OptimizedSequentialVideoProcessor:
         norm_img, _ = process_image(frame[..., ::-1], [cx, cy], scale, 256, 256)
         norm_img = torch.from_numpy(norm_img).unsqueeze(0).to(self.device)
         flipped_norm_img = torch.flip(norm_img, (3,))
-        # 使用当前 extractor 的 predict_init（避免额外加载 extractor_engine 导致 OOM）
+        # Use the current extractor's predict_init to avoid loading extractor_engine again and risking OOM
         return self.extractor.predict_init(flipped_norm_img, tracking_results, subject_id, flip_eval=True)
 
     def _make_fallback_init(self, norm_kp2d):
-        """当无 SMPL init 时，用 zeros(3d) + 2d 关键点构建 fallback init（避免 init_kp.dim() 报错）"""
-        # init_kp: [init_kp3d(51) + norm_kp2d(34)] 与 _process_init 格式一致
+        """When no SMPL init is available, build a fallback init from zeros(3d) + 2d keypoints to avoid init_kp.dim() errors"""
+        # init_kp: [init_kp3d(51) + norm_kp2d(34)], matching the _process_init format
         init_kp3d = torch.zeros(1, 51, device=self.device)
         kp2d = norm_kp2d[:, -1] if norm_kp2d.dim() == 3 else norm_kp2d[0] if norm_kp2d.dim() == 2 else norm_kp2d
         kp2d_flat = kp2d.reshape(1, -1).to(self.device) if kp2d.numel() > 0 else torch.zeros(1, 34, device=self.device)
@@ -1372,7 +1372,7 @@ class OptimizedSequentialVideoProcessor:
         return (init_kp, init_smpl), init_root
 
     def _process_flipped_init(self, subject_data, flipped_norm_kp2d):
-        """处理翻转初始化（用于flip evaluation）"""
+        """Process flipped initialization for flip evaluation"""
         from lib.utils.kp_utils import root_centering
         from lib.utils import transforms
 
@@ -1394,7 +1394,7 @@ class OptimizedSequentialVideoProcessor:
         return (init_kp, init_smpl), init_root
 
     def _cleanup(self):
-        """✅ 清理资源（顺序重要，避免 segfault）"""
+        """✅ Release resources (order matters to avoid segfaults)"""
         import cv2
         
         if self.is_realsense_camera:
@@ -1410,7 +1410,7 @@ class OptimizedSequentialVideoProcessor:
         if is_camera and self.visualize:
             cv2.destroyAllWindows()
         
-        # ✅ 释放原始视频写入器（imageio 用 close，cv2 用 release）
+        # ✅ Release the raw-video writer (imageio uses close, cv2 uses release)
         if self.output_raw_video is not None:
             try:
                 if getattr(self, '_use_imageio_writer', False):
@@ -1422,7 +1422,7 @@ class OptimizedSequentialVideoProcessor:
                 logger.warning(f"Error closing raw video: {e}")
             self.output_raw_video = None
         
-        # ✅ 释放skeleton视频写入器
+        # ✅ Release the skeleton-video writer
         if self.output_skeleton_video is not None:
             try:
                 if getattr(self, '_use_imageio_writer', False):
@@ -1438,7 +1438,7 @@ class OptimizedSequentialVideoProcessor:
         if self.flip_eval and hasattr(self, 'flipped_stream_inference'):
             self.flipped_stream_inference.clear_cache()
         
-        # 显式释放 detector (TensorRT/PyCUDA)，避免 __del__ 在解释器退出时触发 segfault
+        # Explicitly release detector resources (TensorRT/PyCUDA) so __del__ does not trigger a segfault on interpreter shutdown
         if hasattr(self, 'detector') and self.detector is not None:
             try:
                 if hasattr(self.detector, 'cleanup'):
@@ -1458,7 +1458,7 @@ def run(cfg, video, output_pth, network, calib=None, window_size=50,
                   action_config=None, action_checkpoint=None, action_label_map=None, action_engine=None,
                   flip_select='all', flip_interval=5):
     """
-    运行优化的WHAM处理器
+    Run the optimized WHAM processor
     """
     start_total = time.time()
     

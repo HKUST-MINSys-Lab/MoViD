@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-将 pyskl STGCN 模型转换为 TensorRT 格式以加速推理
+Convert a pyskl STGCN model to TensorRT format for faster inference
 
-使用方法:
+Usage:
     python convert_action_model_to_tensorrt.py \
         --config models/action_recognition/stgcn_ntu60_xsub_3d_config.py \
         --checkpoint models/action_recognition/stgcn_ntu60_xsub_3d.pth \
         --output models/action_recognition/stgcn_ntu60_xsub_3d.engine \
         --fp16
 
-依赖:
-    pip install torch2trt  # 或者使用 tensorrt + onnx
+Dependencies:
+    pip install torch2trt  # or use tensorrt + onnx
     pip install onnx onnxruntime tensorrt
 """
 

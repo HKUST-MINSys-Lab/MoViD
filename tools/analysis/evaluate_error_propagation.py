@@ -27,8 +27,8 @@ from lib.data.dataloader import setup_dloaders
 from lib.models import build_network, build_body_model
 from lib.utils.utils import prepare_batch
 
-# ---- 样式配置 (全局) ----
-# 在脚本开头设置，确保所有图表都遵循此样式
+# ---- Style configuration (global) ----
+# Set this at the top of the script so every plot follows the same style
 plt.style.use('seaborn-v0_8-whitegrid')
 plt.rcParams.update({
     'font.family': 'serif',
@@ -48,7 +48,7 @@ plt.rcParams.update({
 
 def setup_seed(seed):
     """ Setup seed for reproducibility """
-    # ... (此函数内容保持不变) ...
+    # ... (function body unchanged) ...
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -58,7 +58,7 @@ def setup_seed(seed):
 
 def procrustes_alignment(predicted, target):
     """ Aligns the predicted 3D pose to the target 3D pose using Procrustes analysis. """
-    # ... (此函数内容保持不变) ...
+    # ... (function body unchanged) ...
     mu_pred = predicted.mean(axis=1, keepdims=True)
     mu_target = target.mean(axis=1, keepdims=True)
 
@@ -84,7 +84,7 @@ def procrustes_alignment(predicted, target):
 
 def compute_mpjpe(predicted, target, align=False):
     """ Computes the Mean Per Joint Position Error (MPJPE). """
-    # ... (此函数内容保持不变) ...
+    # ... (function body unchanged) ...
     assert predicted.shape == target.shape
     
     if align:
@@ -96,7 +96,7 @@ def compute_mpjpe(predicted, target, align=False):
     error = torch.sqrt(((predicted - target) ** 2).sum(dim=-1)).mean(dim=-1)
     return error.mean() * 1000
 
-# ---- 新增的绘图函数 ----
+# ---- New plotting function ----
 def plot_results(results_dict, output_dir, logger):
     """
     Plots the error propagation results in a single figure with three subplots.
@@ -106,7 +106,7 @@ def plot_results(results_dict, output_dir, logger):
     pa_mpjpe_vals = [v['pa_mpjpe'] for v in results_dict.values()]
     accel_err_vals = [v['accel_err'] for v in results_dict.values()]
     
-    # 绘图数据和样式
+    # Plot data and styling
     plot_data = [mpjpe_vals, pa_mpjpe_vals, accel_err_vals]
     titles = ['MPJPE', 'PA-MPJPE', 'Acceleration Error']
     y_labels = ['Error (mm)', 'Error (mm)', 'Error (mm/s²)']
@@ -129,7 +129,7 @@ def plot_results(results_dict, output_dir, logger):
         ax.set_ylabel(y_labels[i], fontweight='bold')
         ax.grid(axis='y', linestyle='--', alpha=0.6)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.96]) # 调整布局以适应主标题
+    plt.tight_layout(rect=[0, 0, 1, 0.96]) # Adjust the layout to fit the main title
     
     save_path = os.path.join(output_dir, 'error_propagation_combined.png')
     plt.savefig(save_path)
@@ -140,7 +140,7 @@ def run_error_propagation_analysis(cfg):
     """
     Main function to run the error propagation analysis.
     """
-    # --- (原有的设置和加载代码保持不变) ---
+    # --- (existing setup and loading code unchanged) ---
     if cfg.SEED_VALUE >= 0:
         setup_seed(cfg.SEED_VALUE)
     logger = create_logger(cfg.LOGDIR, phase='eval_error_prop')
@@ -163,7 +163,7 @@ def run_error_propagation_analysis(cfg):
     network.to(cfg.DEVICE)
     network.eval()
     
-    # --- (评估循环代码保持不变) ---
+    # --- (evaluation loop unchanged) ---
     noise_levels = [0.0, 0.05, 0.10, 0.15, 0.20, 0.25]
     results = {level: {'mpjpe': [], 'pa_mpjpe': [], 'accel_err': []} for level in noise_levels}
     bar = Bar('Error Propagation Analysis', fill='#', max=len(val_loader))
@@ -248,7 +248,7 @@ def run_error_propagation_analysis(cfg):
             bar.next()
     bar.finish()
 
-    # --- 聚合和打印结果 (大部分不变) ---
+    # --- Aggregate and print results (mostly unchanged) ---
     logger.info("="*30)
     logger.info("Error Propagation Analysis Results")
     logger.info("="*30)
@@ -270,7 +270,7 @@ def run_error_propagation_analysis(cfg):
             f"Accel-Err: {avg_accel_err:.2f}mm/s²"
         )
         
-    # --- 统一格式后的绘图调用 ---
+    # --- Plotting call after unifying the format ---
     plot_results(avg_results, cfg.LOGDIR, logger)
 
 

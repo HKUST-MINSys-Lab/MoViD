@@ -1,12 +1,12 @@
-# pyskl 安装说明
+# pyskl Installation Guide
 
-## 方式 1：直接使用脚本
+## Method 1: Run the script directly
 
 ```bash
 bash scripts/setup/install_pyskl.sh
 ```
 
-## 方式 2：手动安装
+## Method 2: Install manually
 
 ```bash
 conda activate wham
@@ -17,11 +17,11 @@ pip install mmcv-full mmengine mmdet mmpose
 pip install -e .
 ```
 
-## 安装完成后
+## After installation
 
 ```bash
 python tools/action/download_stgcn_model.py
 bash scripts/demo/run_demo_har_simple.sh
 ```
 
-如果 `mmcv-full` 安装失败，需要换成与你当前 CUDA / PyTorch 匹配的 wheel。
+If `mmcv-full` installation fails, switch to a wheel that matches your current CUDA / PyTorch setup.

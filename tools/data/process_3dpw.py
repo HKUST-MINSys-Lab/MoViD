@@ -164,31 +164,31 @@ import joblib
 from lib.utils import transforms
 def transform_global_orient(global_orient, extrinsics):
     """
-    根据相机外参变换全局方向
+    Transform the global orientation using camera extrinsics
     
     Args:
-        global_orient (np.ndarray): 原始全局方向 (3,)
-        extrinsics (np.ndarray): 相机外参矩阵 (4x4)
+        global_orient (np.ndarray): original global orientation (3,)
+        extrinsics (np.ndarray): camera extrinsics matrix (4x4)
     
     Returns:
-        np.ndarray: 变换后的全局方向
+        np.ndarray: transformed global orientation
     """
-    # 将 axis-angle 转换为旋转矩阵
+    # Convert axis-angle to a rotation matrix
     global_orient_matrix = transforms.axis_angle_to_matrix(global_orient.clone().detach())
     
-    # 提取相机旋转矩阵的旋转部分（前3x3子矩阵）
+    # Extract the rotational part of the camera matrix (top-left 3x3 block)
     camera_rot_matrix = extrinsics[:3, :3]
     
-    # 组合旋转
+    # Compose rotations
     new_global_orient_matrix = camera_rot_matrix @ global_orient_matrix
     
-    # 将旋转矩阵转回 axis-angle
+    # Convert the rotation matrix back to axis-angle
     new_global_orient = transforms.matrix_to_axis_angle(new_global_orient_matrix.clone().detach()).numpy()
     
     return new_global_orient
-# 加载数据集
-# 初始化 new_dataset
-new_dataset = defaultdict(list)  # 将默认值改为 list
+# Load dataset
+# Initialize new_dataset
+new_dataset = defaultdict(list)  # Use list as the default container
 tt = lambda x: torch.from_numpy(x).float()
 for view in [1,4,6,9]:
 
@@ -198,7 +198,7 @@ for view in [1,4,6,9]:
         if key == 'vid':
             temp = defaultdict(list)
             for i in range(len(value)):
-                # 将结果添加到 new_dataset[key] 中
+                # Append the result to new_dataset[key]
                 temp[key].append(torch.tensor(int(i+len(value)*view)).unsqueeze(0).repeat(len(dataset['kp2d'][i]),1))
             if view == 1:
                 new_dataset[key] = torch.cat(temp[key], dim=0)
@@ -232,5 +232,5 @@ for view in [1,4,6,9]:
                 new_dataset[key] = torch.from_numpy(np.concatenate((new_dataset[key], temp), axis=0))
     
 
-# 保存新数据集
+# Save the new dataset
 joblib.dump(new_dataset, 'dataset/parsed_data/humman_train1469_vit.pth')

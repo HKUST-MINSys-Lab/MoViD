@@ -12,31 +12,31 @@ if str(REPO_ROOT) not in sys.path:
 from lib.utils import transforms
 def transform_global_orient(global_orient, extrinsics):
     """
-    根据相机外参变换全局方向
+    Transform the global orientation using camera extrinsics
     
     Args:
-        global_orient (np.ndarray): 原始全局方向 (3,)
-        extrinsics (np.ndarray): 相机外参矩阵 (4x4)
+        global_orient (np.ndarray): original global orientation (3,)
+        extrinsics (np.ndarray): camera extrinsics matrix (4x4)
     
     Returns:
-        np.ndarray: 变换后的全局方向
+        np.ndarray: transformed global orientation
     """
-    # 将 axis-angle 转换为旋转矩阵
+    # Convert axis-angle to a rotation matrix
     global_orient_matrix = transforms.axis_angle_to_matrix(global_orient.clone().detach())
     
-    # 提取相机旋转矩阵的旋转部分（前3x3子矩阵）
+    # Extract the rotational part of the camera matrix (top-left 3x3 block)
     camera_rot_matrix = extrinsics[:3, :3]
     
-    # 组合旋转
+    # Compose rotations
     new_global_orient_matrix = camera_rot_matrix @ global_orient_matrix
     
-    # 将旋转矩阵转回 axis-angle
+    # Convert the rotation matrix back to axis-angle
     new_global_orient = transforms.matrix_to_axis_angle(new_global_orient_matrix.clone().detach()).numpy()
     
     return new_global_orient
-# 加载数据集
-# 初始化 new_dataset
-new_dataset = defaultdict(list)  # 将默认值改为 list
+# Load dataset
+# Initialize new_dataset
+new_dataset = defaultdict(list)  # Use list as the default container
 tt = lambda x: torch.from_numpy(x).float()
 for view in range(8):
 
@@ -59,7 +59,7 @@ for view in range(8):
         if key == 'vid':
             temp = defaultdict(list)
             for i in range(len(value)):
-                # 将结果添加到 new_dataset[key] 中
+                # Append the result to new_dataset[key]
                 temp[key].append(torch.tensor(int(i+len(value)*view)).unsqueeze(0).repeat(len(dataset['kp2d'][i]),1))
             if view == 0:
                 new_dataset[key] = torch.cat(temp[key], dim=0)
@@ -93,7 +93,7 @@ for view in range(8):
                 new_dataset[key] = torch.from_numpy(np.concatenate((new_dataset[key], temp), axis=0))
     
 
-# 保存新数据集
+# Save the new dataset
 joblib.dump(new_dataset, 'dataset/parsed_data/freeman_train_vit.pth')
 
 
@@ -133,15 +133,15 @@ joblib.dump(new_dataset, 'dataset/parsed_data/freeman_train_vit.pth')
 # from collections import defaultdict
 # import joblib
 
-# # 初始化最终数据集
+# # Initialize the final dataset
 # final_dataset = defaultdict(list)
 # dataset = torch.load(f'/home/yjliu/data0/WHAM/dataset/parsed_data/freeman_train_smpl_06_vit.pth')
-# # 遍历 j = 0 到 j = 10
-# for j in range(8):  # j 从 0 到 10
-#     # 加载数据集
+# # Iterate over j = 0 to j = 10
+# for j in range(8):  # j from 0 to 10
+#     # Load dataset
 #     new_dataset = defaultdict(list)
     
-#     # 提取第 j 个数据
+#     # Extract the j-th data entry
 #     for key, value in dataset[j].items():
 #         new_dataset[key] = value
 
@@ -150,61 +150,61 @@ joblib.dump(new_dataset, 'dataset/parsed_data/freeman_train_vit.pth')
 #     #     new_dataset['res'][i] = res_tensor
 
 #     joblib.dump(new_dataset, f'dataset/parsed_data/freeman_train_smpl_06{j}_vit.pth')
-#     # 初始化 new_dataset2
+#     # Initialize new_dataset2
 #     new_dataset2 = defaultdict(list)
-#     unvalid = []  # 记录无效索引
+#     unvalid = []  # record invalid indices
 
-#     # 遍历 new_dataset，记录无效索引
+#     # Traverse new_dataset and record invalid indices
 #     for i in range(len(new_dataset['frame_id'])):
 #         if new_dataset['frame_id'][i] is None:
 #             unvalid.append(i)
 
-#     # 剔除无效索引，并处理每个键
+#     # Remove invalid indices and process each key
 #     for key, value in new_dataset.items():
 #         if key == 'vid':
 #             valid_vid = []
 #             for i in range(len(value)):
 #                 if i in unvalid:
-#                     continue  # 跳过无效索引
-#                 # 生成 vid 张量并重复 frame_id[i] 的长度
+#                     continue  # skip invalid indices
+#                 # Create a vid tensor and repeat it to match the length of frame_id[i]
 #                 vid_tensor = torch.tensor(int(i)).unsqueeze(0).repeat(len(new_dataset['frame_id'][i]), 1)
 #                 valid_vid.append(vid_tensor)
-#             new_dataset2[key] = torch.cat(valid_vid, dim=0)  # 合并有效 vid 张量
+#             new_dataset2[key] = torch.cat(valid_vid, dim=0)  # Concatenate valid vid tensors
 #         elif key == 'gender':
 #             valid_gender = []
 #             for i in range(len(value)):
 #                 if i in unvalid:
-#                     continue  # 跳过无效索引
-#                 # 生成 gender 张量并重复 frame_id[i] 的长度
+#                     continue  # skip invalid indices
+#                 # Create a gender tensor and repeat it to match the length of frame_id[i]
 #                 gender_tensor = torch.tensor(int(0)).unsqueeze(0).repeat(len(new_dataset['frame_id'][i]), 1)
 #                 valid_gender.append(gender_tensor)
-#             new_dataset2[key] = torch.cat(valid_gender, dim=0)  # 合并有效 gender 张量
+#             new_dataset2[key] = torch.cat(valid_gender, dim=0)  # Concatenate valid gender tensors
 #         elif key == 'frame_id':
-#             # 剔除无效索引
+#             # Remove invalid indices
 #             new_dataset2[key] = [value[i] for i in range(len(value)) if i not in unvalid]
 #         elif key == 'intrinsics':
-#             continue  # 跳过 intrinsics
+#             continue  # skip intrinsics
 #         else:
-#             # 对其他键的值剔除无效索引并合并
+#             # Remove invalid indices from the values of other keys and concatenate them
 #             for i in range(len(value)):
 #                 if i in unvalid:
 #                     continue
 #                 new_dataset2[key].append(value[i])
 
-#     # 添加 'view' 字段，用 j 表示数据来源
-#     num_samples = len(new_dataset2['frame_id'])  # 获取当前数据集的有效样本数
-#     new_dataset2['view'] = torch.tensor([j] * num_samples)  # 添加 view 字段
+#     # Add the 'view' field, using j to indicate the data source
+#     num_samples = len(new_dataset2['frame_id'])  # Get the number of valid samples in the current dataset
+#     new_dataset2['view'] = torch.tensor([j] * num_samples)  # Add the view field
 
-#     # 将当前数据集合并到最终数据集
+#     # Merge the current dataset into the final dataset
 #     for key, value in new_dataset.items():
 #         final_dataset[key].append(value)
 
-# # 合并最终数据集
+# # Merge the final dataset
 # for key in final_dataset:
 #     # if isinstance(final_dataset[key][0], torch.Tensor):
-#     #     final_dataset[key] = torch.cat(final_dataset[key], dim=0)  # 合并张量
+#     #     final_dataset[key] = torch.cat(final_dataset[key], dim=0)  # Concatenate tensors
 #     if isinstance(final_dataset[key][0], list):
-#         final_dataset[key] = [item for sublist in final_dataset[key] for item in sublist]  # 展平列表
+#         final_dataset[key] = [item for sublist in final_dataset[key] for item in sublist]  # Flatten the list
 
-# # 保存最终数据集
+# # Save the final dataset
 # joblib.dump(final_dataset, 'dataset/parsed_data/freeman_train_smpl_06_all_vit.pth')

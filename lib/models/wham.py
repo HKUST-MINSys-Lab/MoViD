@@ -52,15 +52,15 @@ def plot_similarity_heatmap(motion_feat, view_feat, title='Similarity Heatmap', 
 
 def safe_normalize(x, dim=1, eps=1e-6):
     """
-    安全的归一化函数，防止除零
+    Safely normalize values to avoid division by zero
     
-    参数:
-    - x: 输入张量
-    - dim: 归一化的维度
-    - eps: 防止除零的小值
+    Args:
+    - x: input tensor
+    - dim: normalization dimension
+    - eps: small value used to avoid division by zero
     
-    返回:
-    - 归一化后的张量
+    Returns:
+    - normalized tensor
     """
     norm = torch.norm(x, p=2, dim=dim, keepdim=True)
     return x / (norm + eps)
@@ -144,12 +144,12 @@ class Network(nn.Module):
         
         self.mask_embedding = nn.Parameter(torch.zeros(1, 1, n_joints, 2))   
         
-        # 替换视角编码器
+        # Replace the view encoder
         self.view_encoder = MinimalViewEncoder(joint_dim=3, d_embed=d_embed)
         self.dynamic_projection = DynamicProjection(d_model= view_dim)
         #self.view_encoder = ViewEncoder(in_dim=3, d_embed=512)
         
-        # 增强运动编码器
+        # Enhance the motion encoder
         self.motion_encoder = MotionEncoder(in_dim=in_dim, 
                                             d_embed=d_embed,
                                             pose_dr=pose_dr,
@@ -172,24 +172,24 @@ class Network(nn.Module):
             nn.Linear(constrast_dim, constrast_dim)
         )
         
-        # CLIP特征投影层和融合层（新增）
+        # CLIP feature projection and fusion layers (new)
         if True:
-            self.clip_proj = nn.Linear(d_feat, view_dim)  # 将CLIP特征投影到d_embed维度
+            self.clip_proj = nn.Linear(d_feat, view_dim)  # Project CLIP features into the d_embed space
 
-            self.clip_gated_fusion = GatedFusion(view_dim)       # 门控融合CLIP特征
+            self.clip_gated_fusion = GatedFusion(view_dim)       # Gate-fuse CLIP features
             # Module 3. Feature Integrator
             self.integrator = Integrator(in_channel=d_feat + d_context, 
                                         out_channel=d_context)
 
             # Module 4. Motion Decoder
-        # Module 5. Motion Decoder - 从motion特征预测body pose（不包括root）
+        # Module 5. Motion Decoder - Predict body pose from motion features (excluding the root)
         self.motion_decoder = MotionDecoder(
             d_embed=d_embed + n_joints * 3,
             rnn_type=rnn_type,
             n_layers=n_layers
         )
         
-        # View Decoder - 只预测global_orient和cam
+        # View Decoder - predicts only global_orient and cam
         self.view_decoder = ViewDecoder(
             d_embed=d_embed + n_joints * 3,
             rnn_type=rnn_type,
@@ -316,11 +316,11 @@ class Network(nn.Module):
       
     def contrastive_loss(self, pose_feat, motion_feat, temperature=0.1):
         """
-        标准的对比学习 (InfoNCE) 损失
+        Standard contrastive learning (InfoNCE) loss
         - pose_feat: [N, D]
         - motion_feat: [N, D]
         """
-        # squeeze & 确保维度正确
+        # squeeze and ensure the dimensions are correct
         pose_feat = pose_feat.squeeze()
         motion_feat = motion_feat.squeeze()
         if pose_feat.dim() == 1:
@@ -328,7 +328,7 @@ class Network(nn.Module):
         if motion_feat.dim() == 1:
             motion_feat = motion_feat.unsqueeze(0)
 
-        # 保证 batch 对齐
+        # Keep the batch aligned
         N = min(pose_feat.size(0), motion_feat.size(0))
         pose_feat = pose_feat[:N]
         motion_feat = motion_feat[:N]
@@ -337,19 +337,19 @@ class Network(nn.Module):
         pose_feat = F.normalize(pose_feat, p=2, dim=1)
         motion_feat = F.normalize(motion_feat, p=2, dim=1)
 
-        # 拼接两个模态: [2N, D]
+        # Concatenate the two modalities: [2N, D]
         features = torch.cat([pose_feat, motion_feat], dim=0)  # [2N, D]
 
-        # 相似度矩阵 [2N, 2N]
+        # Similarity matrix [2N, 2N]
         sim_matrix = torch.matmul(features, features.t()) / temperature
 
-        # 避免 self-contrast (mask 对角线)
+        # Avoid self-contrast (mask the diagonal)
         mask = torch.eye(2*N, dtype=torch.bool, device=sim_matrix.device)
         sim_matrix = sim_matrix.masked_fill(mask, -1e9)
 
-        # 构造 labels
+        # Construct labels
         labels = torch.arange(N, device=sim_matrix.device)
-        labels = torch.cat([labels + N, labels], dim=0)  # [2N]，正样本索引
+        labels = torch.cat([labels + N, labels], dim=0)  # [2N], positive-sample indices
 
         # cross entropy loss
         loss = F.cross_entropy(sim_matrix, labels)
@@ -357,52 +357,52 @@ class Network(nn.Module):
     
     def evaluate_view_feature(self, gt_joints):
         """
-        评估 view_feature 的质量
+        Evaluate the quality of view_feature
 
         Args:
-            gt_joints (torch.Tensor): ground truth 的 3D 关键点，
-                                      shape 应与 pred_kp3d 一致, e.g., [B, F, num_joints, 3]
+            gt_joints (torch.Tensor): ground-truth 3D joints,
+                                      shape should match pred_kp3d, e.g., [B, F, num_joints, 3]
 
         Returns:
-            dict: 包含各项评估指标的字典
+            dict: dictionary containing evaluation metrics
         """
-        # 使用 torch.no_grad()，因为这只是评估，不需要计算梯度
+        # Use torch.no_grad() because this is evaluation only and does not require gradients
         with torch.no_grad():
-            # 1. 获取预测的 view_feature
-            # 假设 self.pred_view_feat 已经在 forward pass 中被计算并保存
+            # 1. Get the predicted view_feature
+            # Assume self.pred_view_feat has already been computed and stored during the forward pass
             pred_feat = self.view_feat
             
-            # 2. 从 ground truth 关键点生成 "真值" view_feature
-            # 确保 gt_joints 的 shape 和类型与 view_encoder 的输入要求一致
-            gt_feat = self.view_encoder(gt_joints.unsqueeze(0))  # 假设 gt_joints shape 是 [B, F, num_joints, 3]
+            # 2. Generate the "ground-truth" view_feature from ground-truth joints
+            # Ensure gt_joints has the shape and dtype expected by view_encoder
+            gt_feat = self.view_encoder(gt_joints.unsqueeze(0))  # Assume gt_joints has shape [B, F, num_joints, 3]
 
-            # 3. Reshape 特征以便计算指标
-            # 原始 shape: [B, F, D], D 是特征维度
-            # Reshape 成: [B*F, D]
+            # 3. Reshape features so metrics can be computed
+            # Original shape: [B, F, D], where D is the feature dimension
+            # Reshape to: [B*F, D]
             b, f, d = pred_feat.shape
             pred_feat_reshaped = pred_feat.reshape(-1, d)
             gt_feat_reshaped = gt_feat.reshape(-1, d)
 
-            # 4. 计算评估指标
+            # 4. Compute evaluation metrics
             
-            # a) 余弦相似度
-            # F.cosine_similarity 默认计算最后一维的相似度
-            # 我们计算所有帧的平均相似度
+            # a) cosine similarity
+            # F.cosine_similarity computes similarity over the last dimension by default
+            # Compute the average similarity over all frames
             cos_sim = F.cosine_similarity(pred_feat_reshaped, gt_feat_reshaped, dim=1).mean()
 
-            # b) 均方误差 (MSE)
+            # b) mean squared error (MSE)
             mse = F.mse_loss(pred_feat_reshaped, gt_feat_reshaped)
 
-            # c) 可释方差分数
-            # 计算 gt_feat 的方差
+            # c) explained variance score
+            # Compute the variance of gt_feat
             var_gt = torch.var(gt_feat_reshaped, dim=0, unbiased=False)
-            # 计算残差的方差
+            # Compute the variance of the residuals
             var_err = torch.var(gt_feat_reshaped - pred_feat_reshaped, dim=0, unbiased=False)
-            # 避免除以零
+            # Avoid division by zero
             explained_variance_ratio = 1 - (var_err / (var_gt + 1e-9))
             explained_variance_score = torch.mean(explained_variance_ratio)
 
-        # 返回一个包含所有指标的字典
+        # Return a dictionary containing all metrics
         return {
             'view_feat_cosine_similarity': cos_sim.item(),
             'view_feat_mse': mse.item(),
@@ -415,7 +415,7 @@ class Network(nn.Module):
         x = self.preprocess(x, mask)
         init_kp, init_smpl = inits
 
-        # Stage 1. Encode motion - 用于body pose预测
+        # Stage 1. Encode motion - used for body pose prediction
         pred_kp3d, motion_context = self.motion_encoder(x, init_kp)
         motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
         self.old_motion_context = motion_context_with_kp3d.detach()
@@ -423,43 +423,43 @@ class Network(nn.Module):
             motion_context_with_kp3d = self.integrator(motion_context_with_kp3d, img_features)
         # Stage 2. Decode global trajectory
         pred_root, pred_vel = self.trajectory_decoder(motion_context_with_kp3d, init_root, cam_angvel)
-        # Stage 5: 从view_context解码global_orient和cam
+        # Stage 5: decode global_orient and cam from view_context
 
         if img_features is not None and self.integrator is not None and random.random() > 0.5:
-            clip_feat = self.clip_proj(img_features)                     # 投影到d_embed维度
-            motion_context = self.clip_gated_fusion(motion_context, clip_feat)  # 门控融合
-        # 使用极简编码器：只提取髋部和肩部的基本几何特征
+            clip_feat = self.clip_proj(img_features)                     # project to the d_embed dimension
+            motion_context = self.clip_gated_fusion(motion_context, clip_feat)  # gate-fuse
+        # Use a minimal encoder that extracts only basic hip and shoulder geometry
         view_feat = self.view_encoder(pred_kp3d)
         
-        # view_feat: [B, T, d_embed] - 纯视角特征（基于髋部和肩部向量）
+        # view_feat: [B, T, d_embed] - pure view features based on hip and shoulder vectors
         motion_context = self.gated_fusion(motion_context, view_feat)
         
         motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
         pred_global_orient, pred_cam = self.view_decoder(
-            motion_context_with_kp3d,  # 使用view特征
+            motion_context_with_kp3d,  # use view features
             init_smpl
         )
         #pred_kp3d_front = transform_kp3d_to_front_view(pred_kp3d, pred_global_orient)
     
         motion_context = self.dynamic_projection(motion_context, view_feat)
-        # 计算正交性损失（鼓励两个特征空间解耦）
+        # Compute the orthogonality loss to encourage decoupled feature spaces
         ortho_loss = self.orthogonal_loss(motion_context, view_feat)
 
 
-        # 保存用于refiner
+        # Save for the refiner
         motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
         self.motion_context_with_kp3d = motion_context_with_kp3d
         self.motion_context = motion_context
         self.view_feat = view_feat
 
         # Stage 5. Decode body pose from MOTION context only
-        # motion_decoder现在只预测body pose（不包括root）
+        # motion_decoder now predicts only body pose (excluding the root)
         pred_body_pose, pred_shape, pred_contact = self.motion_decoder(
-            motion_context_with_kp3d,  # 使用motion特征
+            motion_context_with_kp3d,  # use motion features
             init_smpl
         )
         
-        # 组合完整的pose: [B, T, 144] = [6 + 138]
+        # Compose the full pose: [B, T, 144] = [6 + 138]
         pred_pose = torch.cat([pred_global_orient, pred_body_pose], dim=-1)
         # --------- #
 
@@ -492,18 +492,18 @@ class Network(nn.Module):
             epsilon = 1e-9
             valid_mask = torch.all(torch.abs(gt_pose_flat) > epsilon, dim=-1)
             
-            # 原有的pose-motion对比学习
+            # Original pose-motion contrastive learning
             gt_pose_filtered = gt_pose_flat[valid_mask]
             motion_context_reshaped = motion_context.reshape(b, f, -1)
             motion_context_filtered = motion_context_reshaped[valid_mask]
             
             if gt_pose_filtered.shape[0] > 0:
-                # 3. 计算特征
+                # 3. Compute features
                 pose_feat = self.pose_proj(gt_pose_filtered[:, 6:])
                 motion_feat = self.motion_proj(motion_context_filtered)
 
-                # 4. 计算对比损失
-                # 因为 pose_feat 和 motion_feat 都已经是 [N, feature_dim] 的形状，无需再 reshape
+                # 4. Compute the contrastive loss
+                # Because pose_feat and motion_feat are already shaped as [N, feature_dim], no extra reshape is needed
                 contrastive_loss = self.contrastive_loss(
                     pose_feat,
                     motion_feat

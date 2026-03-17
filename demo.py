@@ -276,16 +276,16 @@ def run(cfg,
                         buffer_size = action_recognizer.get_buffer_size()
                         if class_idx >= 0 and 'buffering' not in label and label not in ["waiting...", "rate_limiting", "insufficient_frames"]:
                             # Valid prediction - print it
-                            print(f"[实时预测] Subject {_id}, Frame {actual_frame_idx:4d} | Action: {label:25s} | Confidence: {confidence:.4f} | Buffer: {buffer_size:3d}/{action_recognizer.window_size}")
+                            print(f"[Real-time prediction] Subject {_id}, Frame {actual_frame_idx:4d} | Action: {label:25s} | Confidence: {confidence:.4f} | Buffer: {buffer_size:3d}/{action_recognizer.window_size}")
                             logger.info(f"Subject {_id}, Frame {actual_frame_idx}: Action = {label}, Confidence = {confidence:.4f}, Buffer = {buffer_size}/{action_recognizer.window_size}")
                         elif buffer_size < action_recognizer.window_size:
                             # Still buffering
                             if t % 10 == 0:  # Print every 10 frames to avoid too much output
-                                print(f"[缓冲中] Subject {_id}, Frame {actual_frame_idx:4d} | Buffer: {buffer_size:3d}/{action_recognizer.window_size} frames...")
+                                print(f"[Buffering] Subject {_id}, Frame {actual_frame_idx:4d} | Buffer: {buffer_size:3d}/{action_recognizer.window_size} frames...")
                         else:
                             # Invalid prediction but buffer is full
                             if t % 10 == 0:  # Print every 10 frames
-                                print(f"[预测中] Subject {_id}, Frame {actual_frame_idx:4d} | Status: {label} | Buffer: {buffer_size:3d}/{action_recognizer.window_size}")
+                                print(f"[Predicting] Subject {_id}, Frame {actual_frame_idx:4d} | Status: {label} | Buffer: {buffer_size:3d}/{action_recognizer.window_size}")
                     
                     # Store frame-by-frame predictions
                     if 'action_predictions' not in results[_id]:
@@ -303,13 +303,13 @@ def run(cfg,
                             
                             # Print summary
                             print(f"\n{'='*80}")
-                            print(f"[总结] Subject {_id}: 整体预测动作 = {best_pred['label']}")
-                            print(f"       置信度: {best_pred['confidence']:.4f}")
-                            print(f"       有效预测帧数: {len(valid_predictions)}/{len(frame_predictions)}")
+                            print(f"[Summary] Subject {_id}: Overall predicted action = {best_pred['label']}")
+                            print(f"       Confidence: {best_pred['confidence']:.4f}")
+                            print(f"       Valid predicted frames: {len(valid_predictions)}/{len(frame_predictions)}")
                             print(f"{'='*80}\n")
                             logger.info(f"Subject {_id}: Overall Action = {best_pred['label']}, Confidence = {best_pred['confidence']:.4f}, Valid frames = {len(valid_predictions)}/{len(frame_predictions)}")
                         else:
-                            print(f"\n[警告] Subject {_id}: 没有有效的动作预测结果\n")
+                            print(f"\n[Warning] Subject {_id}: No valid action prediction result\n")
                             logger.warning(f"Subject {_id}: No valid action predictions")
     
     # Action recognition is now done frame-by-frame during processing above
@@ -351,7 +351,7 @@ def run(cfg,
                     most_common = Counter(action_labels).most_common(1)[0][0]
                     results[_id]['motiongpt_action'] = most_common
                     results[_id]['motiongpt_full_description'] = ' '.join([p['description'] for p in predictions])
-                    print(f"  [总结] 主要动作: {most_common}")
+                    print(f"  [Summary] Primary action: {most_common}")
 
                 logger.info(f"Subject {_id}: MotionGPT prediction completed with {len(predictions)} chunks")
 
@@ -411,18 +411,18 @@ def run(cfg,
     if visualize:
         with torch.no_grad():
             if skeleton_only:
-                # 只渲染 NTU skeleton（更快，无 mesh）
+                # Render the NTU skeleton only (faster, no mesh)
                 from lib.vis.run_vis import run_skeleton_vis
                 run_skeleton_vis(cfg, video, results, output_pth, network.smpl, vis_global=run_global)
             else:
-                # 渲染 NTU skeleton + mesh（完整可视化）
+                # Render the NTU skeleton + mesh (full visualization)
                 from lib.vis.run_vis import run_vis_on_demo
                 run_vis_on_demo(cfg, video, results, output_pth, network.smpl, vis_global=run_global)
     
-    # GPT Text Visualization (独立的可视化分支)
-    # 如果同时有 --visualize 和 --motiongpt，自动生成两个视频：
+    # GPT Text Visualization (standalone visualization branch)
+    # If both --visualize and --motiongpt are enabled, automatically generate two videos:
     # 1. output_gpt.mp4: NTU skeleton + action_recognition
-    # 2. output_gpt_text.mp4: NTU skeleton + MotionGPT文本
+    # 2. output_gpt_text.mp4: NTU skeleton + MotionGPT text
     if gpt_text_visualize or (visualize and motiongpt_predictor is not None):
         with torch.no_grad():
             from lib.vis.run_vis import run_gpt_text_vis
@@ -687,9 +687,9 @@ def run_stream(cfg,
                 })
                 buffer_size = action_recognizer.get_buffer_size()
                 if class_idx >= 0 and 'buffering' not in label and label not in ["waiting...", "rate_limiting", "insufficient_frames"]:
-                    print(f"[实时预测] Subject {_id}, Frame {actual_frame_idx:4d} | Action: {label:25s} | Confidence: {confidence:.4f} | Buffer: {buffer_size:3d}/{action_recognizer.window_size}")
+                    print(f"[Real-time prediction] Subject {_id}, Frame {actual_frame_idx:4d} | Action: {label:25s} | Confidence: {confidence:.4f} | Buffer: {buffer_size:3d}/{action_recognizer.window_size}")
                 elif buffer_size < action_recognizer.window_size and t % 10 == 0:
-                    print(f"[缓冲中] Subject {_id}, Frame {actual_frame_idx:4d} | Buffer: {buffer_size:3d}/{action_recognizer.window_size} frames...")
+                    print(f"[Buffering] Subject {_id}, Frame {actual_frame_idx:4d} | Buffer: {buffer_size:3d}/{action_recognizer.window_size} frames...")
             results[_id]['action_predictions'] = frame_predictions
             valid = [p for p in frame_predictions if p['class_idx'] >= 0 and 'buffering' not in p['label'] and p['label'] not in ["waiting...", "rate_limiting", "insufficient_frames"]]
             if valid:
@@ -697,7 +697,7 @@ def run_stream(cfg,
                 results[_id]['predicted_action'] = best['label']
                 results[_id]['action_confidence'] = best['confidence']
                 results[_id]['action_class_idx'] = best['class_idx']
-                print(f"\n[总结] Subject {_id}: 整体预测动作 = {best['label']}, 置信度: {best['confidence']:.4f}\n")
+                print(f"\n[Summary] Subject {_id}: Overall predicted action = {best['label']}, Confidence: {best['confidence']:.4f}\n")
 
     # MotionGPT (same as run)
     if motiongpt_predictor is not None:

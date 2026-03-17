@@ -19,69 +19,69 @@ import torch.nn.functional as F
 import random
 def adaptive_contrastive_loss(anchor, positive, negatives):
     """
-    anchor: [B,T,d] motion特征
-    positive: [B,T,d] 本样本pose特征（正样本）
-    negatives: [B,T,d] 推断的负样本
+    anchor: [B,T,d] motion features
+    positive: [B,T,d] pose features from the same sample (positive sample)
+    negatives: [B,T,d] inferred negative samples
     """
-    # 特征归一化
+    # Normalize features
     anchor = F.normalize(anchor, dim=-1)
     positive = F.normalize(positive, dim=-1)
     negatives = F.normalize(negatives, dim=-1)
     
-    # 计算相似度
+    # Compute similarity
     pos_sim = (anchor * positive).sum(dim=-1).mean(dim=-1)  # [B]
     neg_sim = (anchor * negatives).sum(dim=-1).mean(dim=-1)  # [B]
     
-    # 动态温度系数（基于样本难度）
+    # Dynamic temperature coefficient (based on sample difficulty)
     with torch.no_grad():
         hardness = (pos_sim - neg_sim).abs().mean()
         temperature = torch.clamp(0.1 + hardness * 0.5, min=0.01, max=0.5)
     
-    # 损失计算
+    # Compute loss
     loss = -torch.log(
         torch.exp(pos_sim / temperature) / 
         (torch.exp(pos_sim / temperature) + torch.exp(neg_sim / temperature))
     ).mean()
     
-    return loss, temperature.item()  # 返回温度系数用于监控
+    return loss, temperature.item()  # Return the temperature coefficient for monitoring
 
 def safe_normalize(x, dim=1, eps=1e-6):
     """
-    安全的归一化函数，防止除零
+    Safe normalization function to avoid division by zero
     
-    参数:
-    - x: 输入张量
-    - dim: 归一化的维度
-    - eps: 防止除零的小值
+    Args:
+    - x: input tensor
+    - dim: normalization dimension
+    - eps: small value to avoid division by zero
     
-    返回:
-    - 归一化后的张量
+    Returns:
+    - normalized tensor
     """
     norm = torch.norm(x, p=2, dim=dim, keepdim=True)
     return x / (norm + eps)
 
 def debug_contrastive_loss(pose_feat, motion_feat, temperature=0.1):
     """
-    带有调试信息的对比损失函数
+    Contrastive loss function with debug information
     
-    参数:
-    - pose_feat: 姿态特征
-    - motion_feat: 运动特征
-    - temperature: 温度参数
+    Args:
+    - pose_feat: pose features
+    - motion_feat: motion features
+    - temperature: temperature parameter
     
-    返回:
-    - 对比损失
+    Returns:
+    - contrastive loss
     """
-    # 安全归一化
+    # Safe normalization
     pose_feat = safe_normalize(pose_feat, dim=1)
     motion_feat = safe_normalize(motion_feat, dim=1)
 
-    # 计算相似度矩阵
+    # Compute similarity matrix
     similarity_matrix = torch.matmul(pose_feat, motion_feat.t()) / temperature
     
     labels = torch.arange(pose_feat.size(0)).to(pose_feat.device)
     
-    # 安全的交叉熵计算
+    # Safe cross-entropy computation
     try:
         loss_1 = F.cross_entropy(similarity_matrix, labels)
         loss_2 = F.cross_entropy(similarity_matrix.t(), labels)
@@ -94,43 +94,43 @@ def debug_contrastive_loss(pose_feat, motion_feat, temperature=0.1):
 
 def safe_contrastive_loss(pose_feat, motion_feat, temperature=0.1, margin=None):
     """
-    更加健壮的对比损失函数
+    More robust contrastive loss function
     
-    参数:
-    - pose_feat: 姿态特征
-    - motion_feat: 运动特征
-    - temperature: 温度参数
-    - margin: 兼容参数，实际不使用
+    Args:
+    - pose_feat: pose features
+    - motion_feat: motion features
+    - temperature: temperature parameter
+    - margin: compatibility parameter, not actually used
     
-    返回:
-    - 对比损失
+    Returns:
+    - contrastive loss
     """
-    # 移除维度为1的维度
+    # Remove dimensions of size 1
     pose_feat = pose_feat.squeeze()
     motion_feat = motion_feat.squeeze()
     
-    # 确保特征是二维的
+    # Ensure the features are 2D
     if pose_feat.dim() == 1:
         pose_feat = pose_feat.unsqueeze(0)
     if motion_feat.dim() == 1:
         motion_feat = motion_feat.unsqueeze(0)
     
-    # 确保特征维度相同
+    # Ensure feature dimensions match
     min_len = min(pose_feat.size(0), motion_feat.size(0))
     pose_feat = pose_feat[:min_len]
     motion_feat = motion_feat[:min_len]
     
-    # 安全归一化
+    # Safe normalization
     pose_feat = F.normalize(pose_feat, p=2, dim=1)
     motion_feat = F.normalize(motion_feat, p=2, dim=1)
     
-    # 计算相似度矩阵
+    # Compute similarity matrix
     similarity_matrix = torch.matmul(pose_feat, motion_feat.t()) / temperature
     
-    # 创建标签
+    # Create labels
     labels = torch.arange(pose_feat.size(0)).to(pose_feat.device)
     
-    # 计算损失
+    # Compute loss
     try:
         loss_1 = F.cross_entropy(similarity_matrix, labels)
         loss_2 = F.cross_entropy(similarity_matrix.t(), labels)
@@ -145,37 +145,37 @@ def safe_contrastive_loss(pose_feat, motion_feat, temperature=0.1, margin=None):
 def enhanced_orthogonal_loss_1(motion, view, lambda_=0.1, eps=1e-8):
     """
     Args:
-        motion: [B,T,d] 运动特征
-        view: [B,T,d] 视角特征
-        lambda_: 非线性项权重
-        eps: 数值稳定项
+        motion: [B,T,d] motion features
+        view: [B,T,d] view features
+        lambda_: nonlinear term weight
+        eps: numerical stability term
     """
-    # 1. 特征归一化
+    # 1. Normalize features
     motion_norm = F.normalize(motion, p=2, dim=-1)  # [B,T,d]
     view_norm = F.normalize(view, p=2, dim=-1)      # [B,T,d]
     
-    # 2. 线性正交项
+    # 2. Linear orthogonality term
     linear_term = torch.mean((motion_norm * view_norm).sum(dim=-1)**2)
     
-    # 3. 非线性正交项（可选）
+    # 3. Nonlinear orthogonality term (optional)
     delta = 1e-3
     view_perturb = view_norm + delta * torch.randn_like(view_norm)
     perturbed_motion = motion_norm + (view_perturb - view_norm)
-    jacobian = (perturbed_motion - motion_norm) / delta  # 有限差分近似
+    jacobian = (perturbed_motion - motion_norm) / delta  # finite-difference approximation
     nonlin_term = torch.norm(jacobian.transpose(-1,-2) @ jacobian, p='fro')**2
     
     return linear_term + lambda_ * nonlin_term
 
 def enhanced_orthogonal_loss(motion, view, lambda_=0.01):
-    # 归一化
+    # Normalize
     motion = F.normalize(motion, dim=-1)
     view = F.normalize(view, dim=-1)
     
-    # 线性正交项
+    # Linear orthogonality term
     cos_sim = (motion * view).sum(dim=-1)  # [B,T]
     linear_term = torch.mean(cos_sim**2)
     
-    # 非线性正则项（避免显式计算Jacobian）
+    # Nonlinear regularization term (avoids explicit Jacobian computation)
     nonlin_term = torch.mean((motion - view.detach()).norm(dim=-1)**2)
     
     return linear_term + lambda_ * nonlin_term
@@ -206,12 +206,12 @@ class Network(nn.Module):
         
         self.mask_embedding = nn.Parameter(torch.zeros(1, 1, n_joints, 2))   
         
-        # 替换视角编码器
+        # Replace the view encoder
         self.view_encoder = MinimalViewEncoder(joint_dim=3, d_embed=d_embed)
         self.dynamic_projection = DynamicProjection(d_model= view_dim)
         #self.view_encoder = ViewEncoder(in_dim=3, d_embed=512)
         
-        # 增强运动编码器
+        # Enhance the motion encoder
         self.motion_encoder = MotionEncoder(in_dim=in_dim, 
                                             d_embed=d_embed,
                                             pose_dr=pose_dr,
@@ -239,22 +239,22 @@ class Network(nn.Module):
             nn.Linear(constrast_dim, constrast_dim)
         )
         self.lightweight_mlp = LightweightMLP(d_context, output_dim=42)
-        # CLIP特征投影层和融合层（新增）
-        self.clip_proj = nn.Linear(d_feat, view_dim)  # 将CLIP特征投影到d_embed维度
+        # CLIP feature projection and fusion layers (new)
+        self.clip_proj = nn.Linear(d_feat, view_dim)  # Project CLIP features to the d_embed dimension
 
-        self.clip_gated_fusion = GatedFusion(view_dim)       # 门控融合CLIP特征
+        self.clip_gated_fusion = GatedFusion(view_dim)       # Gate and fuse CLIP features
         # Module 3. Feature Integrator
         self.integrator = Integrator(in_channel=d_feat + d_context, 
                                      out_channel=d_context)
 
-        # Module 4. Motion Decoder - 从motion特征预测body pose（不包括root）
+        # Module 4. Motion Decoder - Predict body pose from motion features (excluding root)
         self.motion_decoder = MotionDecoder(
             d_embed=d_embed + n_joints * 3,
             rnn_type=rnn_type,
             n_layers=n_layers
         )
         
-        # View Decoder - 只预测global_orient和cam
+        # View Decoder - Predict only global_orient and cam
         self.view_decoder = ViewDecoder(
             d_embed=d_embed + n_joints * 3,
             rnn_type=rnn_type,
@@ -277,26 +277,26 @@ class Network(nn.Module):
     
     def debug_contrastive_loss(self, pose_feat, motion_feat, temperature=0.1):
         """
-        带有调试信息的对比损失函数
+        Contrastive loss function with debug information
         
-        参数:
-        - pose_feat: 姿态特征
-        - motion_feat: 运动特征
-        - temperature: 温度参数
+        Args:
+        - pose_feat: pose features
+        - motion_feat: motion features
+        - temperature: temperature parameter
         
-        返回:
-        - 对比损失
+        Returns:
+        - contrastive loss
         """
-        # 安全归一化
+        # Safe normalization
         pose_feat = safe_normalize(pose_feat, dim=1)
         motion_feat = safe_normalize(motion_feat, dim=1)
 
-        # 计算相似度矩阵
+        # Compute similarity matrix
         similarity_matrix = torch.matmul(pose_feat, motion_feat.t()) / temperature
         
         labels = torch.arange(pose_feat.size(0)).to(pose_feat.device)
         
-        # 安全的交叉熵计算
+        # Safe cross-entropy computation
         try:
             loss_1 = F.cross_entropy(similarity_matrix, labels)
             loss_2 = F.cross_entropy(similarity_matrix.t(), labels)
@@ -314,11 +314,11 @@ class Network(nn.Module):
     
     def contrastive_loss(self, pose_feat, motion_feat, temperature=0.1):
         """
-        标准的对比学习 (InfoNCE) 损失
+        Standard contrastive learning (InfoNCE) loss
         - pose_feat: [N, D]
         - motion_feat: [N, D]
         """
-        # squeeze & 确保维度正确
+        # squeeze and ensure dimensions are correct
         pose_feat = pose_feat.squeeze()
         motion_feat = motion_feat.squeeze()
         if pose_feat.dim() == 1:
@@ -326,7 +326,7 @@ class Network(nn.Module):
         if motion_feat.dim() == 1:
             motion_feat = motion_feat.unsqueeze(0)
 
-        # 保证 batch 对齐
+        # Ensure batch alignment
         N = min(pose_feat.size(0), motion_feat.size(0))
         pose_feat = pose_feat[:N]
         motion_feat = motion_feat[:N]
@@ -335,19 +335,19 @@ class Network(nn.Module):
         pose_feat = F.normalize(pose_feat, p=2, dim=1)
         motion_feat = F.normalize(motion_feat, p=2, dim=1)
 
-        # 拼接两个模态: [2N, D]
+        # Concatenate the two modalities: [2N, D]
         features = torch.cat([pose_feat, motion_feat], dim=0)  # [2N, D]
 
-        # 相似度矩阵 [2N, 2N]
+        # Similarity matrix [2N, 2N]
         sim_matrix = torch.matmul(features, features.t()) / temperature
 
-        # 避免 self-contrast (mask 对角线)
+        # Avoid self-contrast (mask the diagonal)
         mask = torch.eye(2*N, dtype=torch.bool, device=sim_matrix.device)
         sim_matrix = sim_matrix.masked_fill(mask, -1e9)
 
-        # 构造 labels
+        # Build labels
         labels = torch.arange(N, device=sim_matrix.device)
-        labels = torch.cat([labels + N, labels], dim=0)  # [2N]，正样本索引
+        labels = torch.cat([labels + N, labels], dim=0)  # [2N], positive sample indices
 
         # cross entropy loss
         loss = F.cross_entropy(sim_matrix, labels)
@@ -400,43 +400,43 @@ class Network(nn.Module):
 
     def safe_contrastive_loss(self, pose_feat, motion_feat, temperature=0.1, margin=None):
         """
-        更加健壮的对比损失函数
+        More robust contrastive loss function
         
-        参数:
-        - pose_feat: 姿态特征
-        - motion_feat: 运动特征
-        - temperature: 温度参数
-        - margin: 兼容参数，实际不使用
+        Args:
+        - pose_feat: pose features
+        - motion_feat: motion features
+        - temperature: temperature parameter
+        - margin: compatibility parameter, not actually used
         
-        返回:
-        - 对比损失
+        Returns:
+        - contrastive loss
         """
-        # 移除维度为1的维度
+        # Remove dimensions of size 1
         pose_feat = pose_feat.squeeze()
         motion_feat = motion_feat.squeeze()
         
-        # 确保特征是二维的
+        # Ensure the features are 2D
         if pose_feat.dim() == 1:
             pose_feat = pose_feat.unsqueeze(0)
         if motion_feat.dim() == 1:
             motion_feat = motion_feat.unsqueeze(0)
         
-        # 确保特征维度相同
+        # Ensure feature dimensions match
         min_len = min(pose_feat.size(0), motion_feat.size(0))
         pose_feat = pose_feat[:min_len]
         motion_feat = motion_feat[:min_len]
         
-        # 安全归一化
+        # Safe normalization
         pose_feat = F.normalize(pose_feat, p=2, dim=1)
         motion_feat = F.normalize(motion_feat, p=2, dim=1)
         
-        # 计算相似度矩阵
+        # Compute similarity matrix
         similarity_matrix = torch.matmul(pose_feat, motion_feat.t()) / temperature
         
-        # 创建标签
+        # Create labels
         labels = torch.arange(pose_feat.size(0)).to(pose_feat.device)
         
-        # 计算损失
+        # Compute loss
         try:
             loss_1 = F.cross_entropy(similarity_matrix, labels)
             loss_2 = F.cross_entropy(similarity_matrix.t(), labels)
@@ -450,39 +450,39 @@ class Network(nn.Module):
     def generate_negative_views(self, motion_feat, pose_feat, threshold=0.7):
         """
         Args:
-            motion_feat: [B,T,d] 当前motion特征
-            pose_feat: [B,T,d] 对应的pose特征（作为伪标签）
-            threshold: 相似度阈值，高于此值视为潜在同动作样本
+            motion_feat: [B,T,d] current motion features
+            pose_feat: [B,T,d] corresponding pose features (used as pseudo-labels)
+            threshold: similarity threshold; values above it are treated as potential same-action samples
         Returns:
-            negative_samples: [B,T,d] 负样本（保证与anchor动作不同）
+            negative_samples: [B,T,d] negative samples (guaranteed to differ from the anchor action)
         """
         B, T, d = motion_feat.shape
         
-        # 1. 计算样本间相似度矩阵 [B,B]
+        # 1. Compute the inter-sample similarity matrix [B, B]
         with torch.no_grad():
-            # 沿时间维度平均并归一化
+            # Average over the time dimension and normalize
             pose_centers = F.normalize(pose_feat.mean(dim=1), dim=-1)  # [B,d]
             sim_matrix = torch.mm(pose_centers, pose_centers.t())  # [B,B]
             
-            # 排除自比较
+            # Exclude self-comparisons
             sim_matrix.fill_diagonal_(-1) 
         
-        # 2. 自动推断负样本索引
+        # 2. Automatically infer negative-sample indices
         neg_mask = sim_matrix < threshold  # [B,B]
         valid_neg_counts = neg_mask.sum(dim=1)  # [B]
         
-        # 3. 动态选择负样本
+        # 3. Dynamically choose negative samples
         negatives = []
         for i in range(B):
             if valid_neg_counts[i] > 0:
-                # 选择最相似的"负样本"（困难样本）
+                # Select the most similar "negative sample" (hard sample)
                 neg_indices = torch.where(neg_mask[i])[0]
                 candidates = pose_feat[neg_indices]  # [K,T,d]
                 candidate_sim = sim_matrix[i, neg_indices]  # [K]
                 hardest_idx = candidate_sim.argmax()
                 negatives.append(candidates[hardest_idx])
             else:
-                # 无有效负样本时生成对抗样本
+                # Generate adversarial samples when no valid negative sample exists
                 noise = torch.randn_like(motion_feat[i]) * 0.1
                 negatives.append(motion_feat[i] + noise)
         
@@ -543,7 +543,7 @@ class Network(nn.Module):
         x = self.preprocess(x, mask)
         init_kp, init_smpl = inits
 
-        # Stage 1. Encode motion - 用于body pose预测
+        # Stage 1. Encode motion - for body-pose prediction
         pred_kp3d, motion_context = self.motion_encoder(x, init_kp)
         motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
         self.old_motion_context = motion_context_with_kp3d.detach()
@@ -551,41 +551,41 @@ class Network(nn.Module):
         #     motion_context_with_kp3d = self.integrator(motion_context_with_kp3d, img_features)
         # Stage 2. Decode global trajectory
         pred_root, pred_vel = self.trajectory_decoder(motion_context_with_kp3d, init_root, cam_angvel)
-        # Stage 5: 从view_context解码global_orient和cam
+        # Stage 5: Decode global_orient and cam from view_context
 
-        # clip_feat = self.clip_proj(img_features)                     # 投影到d_embed维度
-        # motion_context = self.clip_gated_fusion(motion_context, clip_feat)  # 门控融合
-        # 使用极简编码器：只提取髋部和肩部的基本几何特征
+        # clip_feat = self.clip_proj(img_features)                     # project to the d_embed dimension
+        # motion_context = self.clip_gated_fusion(motion_context, clip_feat)  # gated fusion
+        # Use a minimal encoder that extracts only basic geometric features from the hips and shoulders
         view_feat = self.view_encoder(pred_kp3d)
         
-        # view_feat: [B, T, d_embed] - 纯视角特征（基于髋部和肩部向量）
+        # view_feat: [B, T, d_embed] - pure view features (based on hip and shoulder vectors)
         motion_context = self.gated_fusion(motion_context, view_feat)
         
         motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
         pred_global_orient, pred_cam = self.view_decoder(
-            motion_context_with_kp3d,  # 使用view特征
+            motion_context_with_kp3d,  # use view features
             init_smpl
         )
     
         motion_context = self.dynamic_projection(motion_context, view_feat)
-        # 计算正交性损失（鼓励两个特征空间解耦）
+        # Compute orthogonality loss (to encourage feature-space disentanglement)
         ortho_loss = self.orthogonal_loss(motion_context, view_feat)
 
 
-        # 保存用于refiner
+        # Save for the refiner
         motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
         self.motion_context_with_kp3d = motion_context_with_kp3d
         self.motion_context = motion_context
         self.view_feat = view_feat
 
         # Stage 5. Decode body pose from MOTION context only
-        # motion_decoder现在只预测body pose（不包括root）
+        # motion_decoder now predicts only body pose (excluding root)
         pred_body_pose, pred_shape, pred_contact = self.motion_decoder(
-            motion_context_with_kp3d,  # 使用motion特征
+            motion_context_with_kp3d,  # use motion features
             init_smpl
         )
         
-        # 组合完整的pose: [B, T, 144] = [6 + 138]
+        # Assemble the full pose: [B, T, 144] = [6 + 138]
         pred_pose = torch.cat([pred_global_orient, pred_body_pose], dim=-1)
         # --------- #
 
@@ -618,18 +618,18 @@ class Network(nn.Module):
             epsilon = 1e-9
             valid_mask = torch.all(torch.abs(gt_pose_flat) > epsilon, dim=-1)
             
-            # 原有的pose-motion对比学习
+            # Existing pose-motion contrastive learning
             gt_pose_filtered = gt_pose_flat[valid_mask]
             motion_context_reshaped = motion_context.reshape(b, f, -1)
             motion_context_filtered = motion_context_reshaped[valid_mask]
             
             if gt_pose_filtered.shape[0] > 0:
-                # 3. 计算特征
+                # 3. Compute features
                 pose_feat = self.pose_proj(gt_pose_filtered[:, 6:])
                 motion_feat = self.motion_proj(motion_context_filtered)
 
-                # 4. 计算对比损失
-                # 因为 pose_feat 和 motion_feat 都已经是 [N, feature_dim] 的形状，无需再 reshape
+                # 4. Compute contrastive loss
+                # pose_feat and motion_feat are already shaped as [N, feature_dim], so no reshape is needed
                 contrastive_loss = self.contrastive_loss(
                     pose_feat,
                     motion_feat
@@ -671,32 +671,32 @@ class Network(nn.Module):
                         hidden_states=None, prev_context=None, prev_kp3d=None, prev_output=None, flip_eval=False, 
                         use_optimized=True, **kwargs):
         """
-        优化的流式推理方法，支持传统模式和优化模式
+        Optimized streaming inference method supporting both legacy and optimized modes
         
         Args:
-            use_optimized (bool): 是否使用优化的循环缓冲区模式（推荐True）
-            其他参数同原方法
+            use_optimized (bool): whether to use the optimized circular-buffer mode (recommended: True)
+            other parameters are the same as in the original method
         
         Returns:
             tuple: (output, hidden_states, current_context, current_kp3d, avg_output)
         """
         
-        # ============ 优化模式：使用 OptimizedStreamInference ============
+        # ============ Optimized mode: use OptimizedStreamInference ============
         if use_optimized:
-            # 首次调用时初始化优化器
+            # Initialize the optimized inference helper on the first call
             if not hasattr(self, '_stream_optimizer'):
                 from configs import constants as _C
-                # 从motion_encoder获取实际的d_embed维度
+                # Get the actual d_embed dimension from motion_encoder
                 d_embed = self.motion_encoder.embed_layer.out_features
                 self._stream_optimizer = StreamInference(
                     network=self,
                     window_size=window_size,
                     device=x.device,
-                    d_embed=d_embed,  # 从网络自动获取d_embed
+                    d_embed=d_embed,  # automatically get d_embed from the network
                     n_joints=_C.KEYPOINTS.NUM_JOINTS
                 )
             
-            # 使用优化的单帧处理
+            # Use optimized single-frame processing
             output, hidden_states = self._stream_optimizer.process_frame(
                 x=x,
                 inits=inits,
@@ -712,7 +712,7 @@ class Network(nn.Module):
                 **kwargs
             )
             
-            # 返回当前帧的 context 和 kp3d（从优化器的缓冲区获取）
+            # Return the current frame's context and kp3d (from the optimizer buffer)
             motion_seq, kp3d_seq = self._stream_optimizer.state_manager.get_windowed_features()
             current_context = torch.cat([
                 motion_seq[:, -1:], 
@@ -720,14 +720,14 @@ class Network(nn.Module):
             ], dim=-1)  # [B, 1, 563]
             current_kp3d = kp3d_seq[:, -1:]  # [B, 1, 51]
             
-            # 处理 flip evaluation
+            # Handle flip evaluation
             avg_output = None
             if flip_eval:
                 avg_output = self._handle_flip_eval(output, cam_intrinsics, bbox, res)
             
             return output, hidden_states, current_context, current_kp3d, avg_output
         
-        # ============ 传统模式：保持原有逻辑（向后兼容）============
+        # ============ Legacy mode: keep the original logic (backward compatible) ============
         else:
             return self._stream_inference_legacy(
                 x, inits, img_features, mask, init_root, cam_angvel,
@@ -737,7 +737,7 @@ class Network(nn.Module):
 
 
     def _handle_flip_eval(self, output, cam_intrinsics, bbox, res):
-        """处理翻转评估的辅助方法"""
+        """Helper method for handling flip evaluation"""
         if output['pose'].shape[0] != 2:
             return None
         
@@ -774,12 +774,12 @@ class Network(nn.Module):
                                 refine_traj=True, hidden_states=None, prev_context=None, prev_kp3d=None,
                                 prev_output=None, flip_eval=False, **kwargs):
         """
-        Edge流式推理 - 严格按照forward流程, 不使用feature/SLAM
+        Edge streaming inference - strictly follows the forward pipeline without using feature/SLAM
 
-        forward流程:
+        Forward pipeline:
         1. motion_encoder -> pred_kp3d, motion_context
         2. cat(motion_context, kp3d) -> trajectory_decoder -> pred_root, pred_vel
-        3. clip_proj + clip_gated_fusion -> motion_context (CLIP融合)
+        3. clip_proj + clip_gated_fusion -> motion_context (CLIP fusion)
         4. view_encoder(pred_kp3d) -> view_feat
         5. gated_fusion(motion_context, view_feat) -> motion_context
         6. cat(motion_context, kp3d) -> view_decoder -> pred_global_orient, pred_cam
@@ -826,7 +826,7 @@ class Network(nn.Module):
             )
 
         # --- Step 4: cat(motion_context, kp3d) for trajectory decoder ---
-        # 关键: trajectory_decoder使用未经CLIP融合的原始motion_context
+        # Key point: trajectory_decoder uses the original motion_context before CLIP fusion
         motion_with_kp_original = torch.cat([
             motion_context_current,
             pred_kp3d_current.reshape(self.b, 1, -1)
@@ -848,7 +848,7 @@ class Network(nn.Module):
                 hidden_states['trajectory_decoder']
             )
 
-        # --- Step 7: CLIP feature fusion (在trajectory decoder之后) ---
+        # --- Step 7: CLIP feature fusion (after the trajectory decoder) ---
         # if img_features is not None:
         #     clip_feat = self.clip_proj(img_features[:, -1:])
         #     motion_context_current = self.clip_gated_fusion(motion_context_current, clip_feat)
@@ -938,17 +938,16 @@ class Network(nn.Module):
 
 
     def reset_stream_state(self):
-        """重置流式推理状态（用于新序列开始）"""
+        """Reset streaming inference state (for the start of a new sequence)"""
         if hasattr(self, '_stream_optimizer'):
             self._stream_optimizer.reset()
             print("Stream inference state reset")
 
 
     def print_stream_stats(self):
-        """打印流式推理性能统计"""
+        """Print streaming inference performance statistics"""
         if hasattr(self, '_stream_optimizer'):
             self._stream_optimizer.print_stats()
-
 
 
 

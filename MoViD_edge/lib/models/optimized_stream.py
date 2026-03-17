@@ -4,7 +4,7 @@ import torch.nn as nn
 from typing import Dict, Optional, Tuple
 
 class RingBuffer:
-    """高效的循环缓冲区,避免频繁拷贝"""
+    """Efficient ring buffer that avoids frequent copying"""
     def __init__(self, max_size: int, feat_dim: int, device: str):
         self.buffer = torch.zeros(1, max_size, feat_dim, device=device)
         self.ptr = 0
@@ -13,20 +13,20 @@ class RingBuffer:
         self.device = device
     
     def push(self, x: torch.Tensor):
-        """O(1)添加新元素"""
+        """Add a new element in O(1)"""
         self.buffer[:, self.ptr] = x.squeeze(1)
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
     
     def get_sequence(self) -> torch.Tensor:
-        """获取当前序列(避免不必要的拷贝)"""
+        """Get the current sequence without unnecessary copying"""
         if self.size < self.max_size:
             return self.buffer[:, :self.size]
         
         if self.ptr == 0:
-            return self.buffer  # 已对齐,直接返回
+            return self.buffer  # already aligned; return directly
         
-        # 仅在必要时重排
+        # Reorder only when necessary
         return torch.cat([
             self.buffer[:, self.ptr:],
             self.buffer[:, :self.ptr]
@@ -38,7 +38,7 @@ class RingBuffer:
 
 
 class StreamStateManager:
-    """管理流式推理状态"""
+    """Manage streaming-inference state"""
     def __init__(self, window_size: int, device: str, d_embed: int = 128,
                  n_joints: int = 17, view_change_thresh: float = 0.5):
         self.window_size = window_size
@@ -51,15 +51,15 @@ class StreamStateManager:
         self.kp3d_dim = n_joints * 3  # 17*3 = 51
         self.motion_with_kp_dim = d_embed + self.kp3d_dim  # 128 + 51 = 179
 
-        # 循环缓冲区
-        self.motion_buffer = RingBuffer(window_size, d_embed, device)  # motion_context维度
+        # Ring buffer
+        self.motion_buffer = RingBuffer(window_size, d_embed, device)  # motion_context dimension
         self.kp3d_buffer = RingBuffer(window_size, self.kp3d_dim, device)  # 17*3 keypoints
 
-        # 状态标志
+        # State flags
         self.is_initialized = False
         self.frame_count = 0
 
-        # 预分配张量池
+        # Preallocated tensor pool
         self.tensor_pool = {
             'motion_with_kp': torch.empty(1, 1, self.motion_with_kp_dim, device=device),
             'integrated_feat': None,
@@ -69,37 +69,37 @@ class StreamStateManager:
 
     @staticmethod
     def compute_view_diff(x1, x2):
-        # 可换为更复杂的 metric（例如直方图差异或特征差异）
+        # Can be replaced with a more complex metric such as histogram or feature differences
         return torch.mean(torch.abs(x1 - x2))
 
     def get_view_feat(self, x, view_encoder):
         if self.last_view_img is None:
-            # 第一次必须计算
+            # Must compute on the first call
             self.last_view_feat = view_encoder(x)
             self.last_view_img = x.clone()
         else:
             diff = self.compute_view_diff(x, self.last_view_img)
             if diff > self.view_change_thresh:
-                # 视角变化较大 -> 重新计算
+                # View changes are large -> recompute
                 self.last_view_feat = view_encoder(x)
                 self.last_view_img = x.clone()
-            # 否则直接复用缓存
+            # Otherwise reuse the cache directly
         return self.last_view_feat
     
     def update_buffers(self, motion_context: torch.Tensor, kp3d: torch.Tensor):
-        """更新缓冲区"""
+        """Update the buffer"""
         self.motion_buffer.push(motion_context)
         self.kp3d_buffer.push(kp3d.reshape(1, 1, -1))
         self.frame_count += 1
     
     def get_windowed_features(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        """获取窗口特征(无拷贝)"""
+        """Get window features without copying"""
         motion_seq = self.motion_buffer.get_sequence()
         kp3d_seq = self.kp3d_buffer.get_sequence()
         return motion_seq, kp3d_seq
     
     def reset(self):
-        """重置状态"""
+        """Reset state"""
         self.motion_buffer.clear()
         self.kp3d_buffer.clear()
         self.is_initialized = False
@@ -107,7 +107,7 @@ class StreamStateManager:
 
 
 class StreamInference(nn.Module):
-    """优化的流式推理模块"""
+    """Optimized streaming inference module"""
     def __init__(self, network, window_size: int = 10, device: str = 'cuda',
                  d_embed: int = 128, n_joints: int = 17):
         super().__init__()
@@ -118,12 +118,12 @@ class StreamInference(nn.Module):
         self.n_joints = n_joints
         self.kp3d_dim = n_joints * 3
 
-        # 状态管理器
+        # State manager
         self.state_manager = StreamStateManager(
             window_size, device, d_embed=d_embed, n_joints=n_joints
         )
         
-        # 性能统计
+        # Performance statistics
         self.stats = {
             'buffer_ops': 0,
             'concat_ops': 0,
@@ -142,12 +142,12 @@ class StreamInference(nn.Module):
                      prev_output: Optional[Dict] = None,
                      **kwargs) -> Tuple[Dict, Dict]:
         """
-        Edge单帧处理 - 严格按照forward流程, 不使用feature/SLAM
+        Edge single-frame processing - follow the forward pipeline strictly, without using feature/SLAM
 
-        forward流程:
+        forward pipeline:
         1. motion_encoder -> pred_kp3d, motion_context
         2. cat(motion_context, kp3d) -> trajectory_decoder -> pred_root, pred_vel
-        3. clip_proj + clip_gated_fusion -> motion_context (CLIP融合)
+        3. clip_proj + clip_gated_fusion -> motion_context (CLIP fusion)
         4. view_encoder(pred_kp3d) -> view_feat
         5. gated_fusion(motion_context, view_feat) -> motion_context
         6. cat(motion_context, kp3d) -> view_decoder -> pred_global_orient, pred_cam
@@ -156,7 +156,7 @@ class StreamInference(nn.Module):
         9. cat(pred_global_orient, pred_body_pose) -> pred_pose
         """
 
-        # ===== 初始化 =====
+        # ===== initialization =====
         if hidden_states is None:
             hidden_states = self._init_hidden_states()
         # Ensure view_decoder key exists
@@ -165,14 +165,14 @@ class StreamInference(nn.Module):
 
         b = x.shape[0]
 
-        # ===== Step 1: 预处理 =====
+        # ===== Step 1: preprocessing =====
         x_current = x[:, -1:] if x.shape[1] > 1 else x
         mask_current = mask[:, -1:] if mask is not None and mask.shape[1] > 1 else mask
         x_processed = self.network.preprocess(x_current, mask_current)
 
         init_kp, init_smpl = inits
 
-        # ===== Step 2: 获取前一帧3D关键点 =====
+        # ===== Step 2: get previous-frame 3D keypoints =====
         prev_kp3d = self._get_prev_kp3d(prev_output, init_kp, b)
 
         # ===== Step 3: Motion Encoder =====
@@ -184,7 +184,7 @@ class StreamInference(nn.Module):
             )
 
         # ===== Step 4: cat(motion_context, kp3d) for trajectory decoder =====
-        # 关键: trajectory_decoder使用未经CLIP融合的原始motion_context
+        # Key point: trajectory_decoder uses the original motion_context before CLIP fusion
         motion_with_kp_original = torch.cat([
             motion_context,
             pred_kp3d.reshape(b, 1, -1)
@@ -200,7 +200,7 @@ class StreamInference(nn.Module):
                 hidden_states['trajectory_decoder']
             )
 
-        # ===== Step 6: CLIP feature fusion (在trajectory decoder之后) =====
+        # ===== Step 6: CLIP feature fusion (after the trajectory decoder) =====
         # if img_features is not None:
         #     clip_feat = self.network.clip_proj(img_features[:, -1:])
         #     motion_context = self.network.clip_gated_fusion(motion_context, clip_feat)
@@ -238,7 +238,7 @@ class StreamInference(nn.Module):
             pred_kp3d.reshape(b, 1, -1)
         ], dim=-1)
 
-        # ===== Step 14: 更新缓冲区 =====
+        # ===== Step 14: Update the buffer =====
         self.state_manager.update_buffers(motion_context_projected, pred_kp3d)
         self.stats['buffer_ops'] += 1
 
@@ -264,7 +264,7 @@ class StreamInference(nn.Module):
         return output, hidden_states
     
     def _concat_features(self, motion: torch.Tensor, kp3d: torch.Tensor, b: int) -> torch.Tensor:
-        """拼接motion和kp3d特征"""
+        """Concatenate motion and kp3d features"""
         return torch.cat([
             motion,
             kp3d.reshape(b, 1, -1)
@@ -272,7 +272,7 @@ class StreamInference(nn.Module):
     
     def _get_prev_kp3d(self, prev_output: Optional[Dict], 
                        init_kp: Optional[torch.Tensor], b: int) -> torch.Tensor:
-        """获取前一帧3D关键点(避免条件分支)"""
+        """Get previous-frame 3D keypoints (avoid conditional branches)"""
         if prev_output is not None and 'kp3d_nn' in prev_output:
             return prev_output['kp3d_nn'][:, -1:].clone()
         if init_kp is None:
@@ -283,7 +283,7 @@ class StreamInference(nn.Module):
     
     def _get_prev_root(self, prev_output: Optional[Dict],
                        init_root: Optional[torch.Tensor], b: int) -> torch.Tensor:
-        """获取前一帧root，保证返回 (b, 1, 6) 以匹配 trajectory_decoder"""
+        """Get the previous root and ensure the return shape is (b, 1, 6) to match trajectory_decoder"""
         if prev_output is not None and 'poses_root_r6d' in prev_output:
             return prev_output['poses_root_r6d'][:, -1:].clone()
         if init_root is None:
@@ -294,7 +294,7 @@ class StreamInference(nn.Module):
     
     def _get_prev_smpl(self, prev_output: Optional[Dict],
                        init_smpl: Optional[torch.Tensor], b: int) -> torch.Tensor:
-        """获取前一帧SMPL参数"""
+        """Get the previous-frame SMPL parameters"""
         if prev_output is not None and 'pose' in prev_output:
             return prev_output['pose'][:, -1:].clone()
         if init_smpl is None:
@@ -305,18 +305,18 @@ class StreamInference(nn.Module):
 
     def _prepare_init_smpl_view(self, prev_smpl: torch.Tensor,
                                 prev_output: Optional[Dict], b: int) -> torch.Tensor:
-        """准备ViewDecoder的初始化输入（需要 [B, 1, 24, 6] 格式）"""
+        """Prepare the initialization input for ViewDecoder (requires [B, 1, 24, 6])"""
         if prev_smpl.shape[-1] == 144:
-            # 如果prev_smpl是扁平化的 [B, 1, 144]，需要reshape
+            # If prev_smpl is flattened as [B, 1, 144], reshape it
             return prev_smpl.reshape(b, 1, 24, 6)
         elif prev_smpl.dim() >= 3 and prev_smpl.shape[-1] == 6 and prev_smpl.shape[-2] == 24:
-            # 如果已经是 [B, 1, 24, 6] 格式
+            # If it is already in [B, 1, 24, 6] format
             return prev_smpl
         else:
-            # 默认：创建零初始化的 [B, 1, 24, 6]
+            # Default: create a zero-initialized [B, 1, 24, 6] tensor
             init_smpl_view = torch.zeros(b, 1, 24, 6, device=self.device)
             if prev_output is not None and 'pose' in prev_output:
-                # 尝试从prev_output中提取global_orient
+                # Try to extract global_orient from prev_output
                 prev_pose = prev_output['pose'][:, -1:].clone()
                 if prev_pose.shape[-1] >= 6:
                     init_smpl_view[:, :, 0, :] = prev_pose[:, :, :6]
@@ -325,7 +325,7 @@ class StreamInference(nn.Module):
     def _forward_smpl_optimized(self, pred_pose, pred_shape, pred_cam,
                                pred_contact, pred_root, pred_vel, pred_kp3d,
                                **kwargs) -> Dict:
-        """优化的SMPL前向传播(仅处理当前帧)"""
+        """Optimized SMPL forward pass (current frame only)"""
         self.network.pred_pose = pred_pose
         self.network.pred_shape = pred_shape
         self.network.pred_cam = pred_cam
@@ -334,8 +334,8 @@ class StreamInference(nn.Module):
         self.network.pred_vel = pred_vel
         self.network.pred_kp3d = pred_kp3d
         
-        # 单帧预测时，pred_cam shape=(1,1,3). 若传入整窗口bbox，SMPL 会错误投影
-        # 只取最后一帧的 bbox/cam_intrinsics 以匹配 pred_cam
+        # For single-frame prediction, pred_cam has shape (1,1,3). Passing a full-window bbox causes incorrect SMPL projection
+        # Use only the last frame's bbox/cam_intrinsics to match pred_cam
         smpl_kwargs = dict(kwargs)
         if pred_cam.shape[1] == 1 and 'bbox' in smpl_kwargs and smpl_kwargs['bbox'] is not None:
             bbox = smpl_kwargs['bbox']
@@ -348,7 +348,7 @@ class StreamInference(nn.Module):
         
         output = self.network.forward_smpl(**smpl_kwargs)
         
-        # 添加必要的键以保证连续性
+        # Add the required keys to preserve continuity
         if 'poses_root_r6d' not in output:
             output['poses_root_r6d'] = pred_root
         if 'vel' not in output:
@@ -359,7 +359,7 @@ class StreamInference(nn.Module):
         return output
     
     def _init_hidden_states(self) -> Dict:
-        """初始化隐藏状态"""
+        """Initialize hidden states"""
         return {
             'motion_encoder': None,
             'trajectory_decoder': None,
@@ -369,12 +369,12 @@ class StreamInference(nn.Module):
         }
     
     def reset(self):
-        """重置推理器状态"""
+        """Reset inferencer state"""
         self.state_manager.reset()
         self.stats = {k: 0 for k in self.stats}
     
     def print_stats(self):
-        """打印性能统计"""
+        """Print performance statistics"""
         print(f"\n=== Optimized Stream Inference Stats ===")
         print(f"Buffer Operations: {self.stats['buffer_ops']}")
         print(f"Concat Operations: {self.stats['concat_ops']}")

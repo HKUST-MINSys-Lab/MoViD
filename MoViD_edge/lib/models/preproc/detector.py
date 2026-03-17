@@ -441,7 +441,7 @@ class DetectionModel(object):
             self.trt_initialized = False
 
     def __del__(self):
-        """Destructor - 避免解释器退出时 segfault"""
+        """Destructor - avoid a segfault when the interpreter exits"""
         try:
             self.cleanup()
         except Exception:

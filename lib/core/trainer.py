@@ -598,7 +598,7 @@ class Trainer():
         if osp.isfile(model_path):
             checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
 
-            # 提取 motion_encoder 的参数
+            # Extract motion_encoder parameters
             model_dict = checkpoint['model']
             motion_encoder_state = {
                 k.replace('motion_encoder.', ''): v
@@ -606,7 +606,7 @@ class Trainer():
                 if k.startswith('motion_encoder.')
             }
 
-            # 检查 network 是否有 motion_encoder
+            # Check whether network has motion_encoder
             if hasattr(self.network, 'motion_encoder'):
                 missing_keys, unexpected_keys = self.network.motion_encoder.load_state_dict(
                     motion_encoder_state, strict=False

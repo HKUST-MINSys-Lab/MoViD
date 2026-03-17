@@ -1,10 +1,10 @@
 """
-稳定的 Action Recognition 包装器
+Stable Action Recognition wrapper
 
-在现有模型基础上添加简单的稳定化机制：
-1. 滑动平均平滑
-2. 置信度过滤
-3. 动作切换延迟
+Adds a lightweight stabilization layer on top of the existing model:
+1. Moving-average smoothing
+2. Confidence filtering
+3. Delayed action switching
 """
 import numpy as np
 from typing import Optional, Tuple
@@ -13,9 +13,9 @@ from loguru import logger
 
 class StableActionRecognizer:
     """
-    稳定的动作识别包装器
+    Stable action-recognition wrapper
     
-    在现有 ActionRecognizer 基础上添加简单的稳定化机制
+    Adds a lightweight stabilization layer on top of the current ActionRecognizer
     """
     
     def __init__(self, base_recognizer, 
@@ -24,17 +24,17 @@ class StableActionRecognizer:
                  min_switch_frames: int = 8):
         """
         Args:
-            base_recognizer: 基础的 ActionRecognizer 或 ActionRecognizerTRT 实例
-            smoothing_window: 滑动平均窗口大小（帧数）
-            confidence_threshold: 置信度阈值
-            min_switch_frames: 最小切换帧数（新动作需要持续多少帧才切换）
+            base_recognizer: base ActionRecognizer or ActionRecognizerTRT instance
+            smoothing_window: moving-average window size (in frames)
+            confidence_threshold: confidence threshold
+            min_switch_frames: minimum switch frames (how long a new action must persist before switching)
         """
         self.base_recognizer = base_recognizer
         self.smoothing_window = smoothing_window
         self.confidence_threshold = confidence_threshold
         self.min_switch_frames = min_switch_frames
         
-        # 预测历史（用于滑动平均）
+        # prediction history used for moving-average smoothing
         self.prediction_buffer: list = []  # [(class_idx, confidence, label), ...]
         self.current_stable_action: str = "waiting..."
         self.current_stable_confidence: float = 0.0
@@ -49,43 +49,43 @@ class StableActionRecognizer:
     
     def predict_action(self, joints3d: Optional[np.ndarray] = None) -> Tuple[int, float, str]:
         """
-        稳定的动作预测
+        stable action prediction
         
         Args:
-            joints3d: 3D 关键点
+            joints3d: 3D keypoints
             
         Returns:
             (class_idx, confidence, label)
         """
-        # 调用基础模型进行预测
+        # Call the base model for prediction
         class_idx, confidence, label = self.base_recognizer.predict_action(joints3d)
         
-        # 如果基础模型返回错误，直接返回
+        # Return immediately if the base model reports an error
         if class_idx < 0 or "buffering" in label or "error" in label:
             return class_idx, confidence, label
         
-        # 添加到预测缓冲区
+        # Append to the prediction buffer
         self.prediction_buffer.append((class_idx, confidence, label))
         if len(self.prediction_buffer) > self.smoothing_window:
             self.prediction_buffer.pop(0)
         
-        # 应用稳定化
+        # Apply stabilization
         stable_pred = self._get_stable_prediction()
         if stable_pred:
             return stable_pred
         
-        # 如果稳定化失败，返回当前稳定动作
+        # If stabilization fails, return the current stable action
         if self.current_stable_action != "waiting...":
             return -1, self.current_stable_confidence, self.current_stable_action
         
         return class_idx, confidence, label
     
     def _get_stable_prediction(self) -> Optional[Tuple[int, float, str]]:
-        """使用滑动平均和延迟切换获取稳定预测"""
+        """Use moving-average smoothing and delayed switching to produce a stable prediction"""
         if len(self.prediction_buffer) < 3:
             return None
         
-        # 统计最近窗口内的动作
+        # Count actions within the recent window
         action_scores = {}  # {label: [confidences]}
         action_counts = {}  # {label: count}
         
@@ -96,36 +96,36 @@ class StableActionRecognizer:
             action_scores[label].append(conf)
             action_counts[label] += 1
         
-        # 找出出现次数最多的动作
+        # Find the most frequent action
         best_label = max(action_counts.keys(), key=lambda x: action_counts[x])
         best_count = action_counts[best_label]
         avg_confidence = np.mean(action_scores[best_label])
         
-        # 置信度过滤
+        # Confidence filtering
         if avg_confidence < self.confidence_threshold:
             return None
         
-        # 获取对应的 class_idx
+        # Get the corresponding class_idx
         best_class_idx = -1
         for class_idx, _, label in self.prediction_buffer:
             if label == best_label:
                 best_class_idx = class_idx
                 break
         
-        # 动作切换延迟机制
+        # Action-switch delay mechanism
         if best_label != self.current_stable_action:
-            # 新动作需要确认
+            # A new action needs confirmation
             if self.pending_action is None or self.pending_action[0] != best_label:
-                # 开始新的待确认动作
+                # Start tracking a new pending action
                 self.pending_action = (best_label, avg_confidence)
                 self.pending_frames = 1
-                # 继续使用当前动作
+                # Keep using the current action
                 return None
             else:
-                # 待确认动作持续中
+                # The pending action is still being confirmed
                 self.pending_frames += 1
                 if self.pending_frames >= self.min_switch_frames:
-                    # 确认切换
+                    # Confirm the switch
                     self.current_stable_action = best_label
                     self.current_stable_confidence = avg_confidence
                     self.current_action_frames = 0
@@ -134,10 +134,10 @@ class StableActionRecognizer:
                     logger.debug(f"Action switched: {best_label} (conf: {avg_confidence:.3f}, count: {best_count}/{len(self.prediction_buffer)})")
                     return best_class_idx, avg_confidence, best_label
                 else:
-                    # 继续使用当前动作
+                    # Keep using the current action
                     return None
         else:
-            # 动作未变化
+            # The action has not changed
             self.current_action_frames += 1
             self.pending_action = None
             self.pending_frames = 0
@@ -145,11 +145,11 @@ class StableActionRecognizer:
             return best_class_idx, avg_confidence, best_label
     
     def get_buffer_size(self) -> int:
-        """获取 buffer 大小"""
+        """Get buffer size"""
         return self.base_recognizer.get_buffer_size()
     
     def reset_buffer(self):
-        """重置 buffer"""
+        """Reset the buffer"""
         self.base_recognizer.reset_buffer()
         self.prediction_buffer = []
         self.current_stable_action = "waiting..."
@@ -159,7 +159,7 @@ class StableActionRecognizer:
         self.pending_frames = 0
     
     def get_buffer_info(self) -> dict:
-        """获取 buffer 信息"""
+        """Get buffer information"""
         info = self.base_recognizer.get_buffer_info()
         info['stable_action'] = self.current_stable_action
         info['stable_confidence'] = self.current_stable_confidence
@@ -167,5 +167,5 @@ class StableActionRecognizer:
         return info
     
     def __getattr__(self, name):
-        """代理其他属性到基础模型"""
+        """Proxy all other attributes to the base model"""
         return getattr(self.base_recognizer, name)
