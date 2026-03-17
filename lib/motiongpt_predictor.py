@@ -1,7 +1,7 @@
 """
 MotionGPT Action Predictor for MoViD
 
-Converts WHAM output (pose, trans, betas) to text description using MotionGPT3's m2t task.
+Converts MoViD output (pose, trans, betas) to text description using MotionGPT3's m2t task.
 """
 
 import os
@@ -199,7 +199,7 @@ class MotionGPTPredictor:
 
     def pose_to_hml263(self, pose, trans, betas, feet_thre=0.002):
         """
-        Convert WHAM pose parameters to HumanML3D 263-dim features.
+        Convert MoViD pose parameters to HumanML3D 263-dim features.
 
         Args:
             pose: (T, 72) SMPL pose parameters
@@ -242,7 +242,7 @@ class MotionGPTPredictor:
         # SMPL uses Y-down, HumanML3D expects Y-up
         joints3d[:, :, 1] = -joints3d[:, :, 1]
 
-        # WHAM outputs camera-relative coordinates where person faces camera (-Z)
+        # MoViD outputs camera-relative coordinates where person faces camera (-Z)
         # HumanML3D expects person to face +Z, so flip Z axis
         joints3d[:, :, 2] = -joints3d[:, :, 2]
 
@@ -356,22 +356,22 @@ class MotionGPTPredictor:
 
         return results
 
-    def predict_from_wham(self, wham_result, subject_id=0, chunk_size=100):
+    def predict_from_movid(self, movid_result, subject_id=0, chunk_size=100):
         """
-        Predict action description from WHAM output.
+        Predict action description from MoViD output.
 
         Args:
-            wham_result: dict with 'pose', 'trans', 'betas' keys
-            subject_id: subject ID in WHAM output
+            movid_result: dict with 'pose', 'trans', 'betas' keys
+            subject_id: subject ID in MoViD output
             chunk_size: frames per chunk
 
         Returns:
             list of dict with predictions
         """
-        if isinstance(wham_result, dict) and subject_id in wham_result:
-            data = wham_result[subject_id]
+        if isinstance(movid_result, dict) and subject_id in movid_result:
+            data = movid_result[subject_id]
         else:
-            data = wham_result
+            data = movid_result
 
         pose = data['pose']
         trans = data['trans']

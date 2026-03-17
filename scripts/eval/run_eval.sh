@@ -6,11 +6,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common.sh"
 
-activate_conda_wham
+activate_conda_movid
 enter_repo_root
 
 TARGET="${1:-3dpw}"
-CHECKPOINT="${2:-$(default_wham_checkpoint)}"
+CHECKPOINT="${2:-$(default_movid_checkpoint)}"
 CFG="${CFG:-configs/yamls/demo.yaml}"
 
 require_file "${CHECKPOINT}" "Evaluation checkpoint"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# WHAM Environment Installation Script
+# MoViD Environment Installation Script
 # Based on docs/INSTALL.md
 
 set -e
@@ -18,7 +18,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}WHAM Environment Installation${NC}"
+echo -e "${GREEN}MoViD Environment Installation${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -38,31 +38,31 @@ if ! command -v conda &> /dev/null; then
 fi
 
 # Step 1: Create Conda environment
-echo -e "${GREEN}Step 1: Creating Conda environment 'wham' with Python 3.9...${NC}"
+echo -e "${GREEN}Step 1: Creating Conda environment 'movid' with Python 3.9...${NC}"
 if command -v conda &> /dev/null; then
     # Check if environment already exists
-    if conda env list | grep -q "^wham "; then
-        echo -e "${YELLOW}Environment 'wham' already exists.${NC}"
+    if conda env list | grep -q "^movid "; then
+        echo -e "${YELLOW}Environment 'movid' already exists.${NC}"
         read -p "Do you want to remove and recreate it? (y/N): " recreate_choice
         if [[ "$recreate_choice" =~ ^[Yy]$ ]]; then
-            conda env remove -n wham -y
-            conda create -n wham python=3.9 -y
+            conda env remove -n movid -y
+            conda create -n movid python=3.9 -y
         else
             echo -e "${YELLOW}Using existing environment.${NC}"
         fi
     else
-        conda create -n wham python=3.9 -y
+        conda create -n movid python=3.9 -y
     fi
     
-    echo -e "${GREEN}Activating conda environment 'wham'...${NC}"
-    echo -e "${YELLOW}Please run: conda activate wham${NC}"
+    echo -e "${GREEN}Activating conda environment 'movid'...${NC}"
+    echo -e "${YELLOW}Please run: conda activate movid${NC}"
     echo -e "${YELLOW}Then continue with the installation.${NC}"
     echo ""
     
     # Note: We can't activate conda in a script, so we'll provide instructions
     echo -e "${GREEN}Next steps (run these commands after activating the environment):${NC}"
     echo ""
-    echo "conda activate wham"
+    echo "conda activate movid"
     echo ""
     echo "# Install PyTorch libraries"
     echo "conda install pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch -y"
@@ -71,7 +71,7 @@ if command -v conda &> /dev/null; then
     echo "conda install -c fvcore -c iopath -c conda-forge fvcore iopath -y"
     echo "pip install pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu113_pyt1110/download.html"
     echo ""
-    echo "# Install WHAM dependencies"
+    echo "# Install MoViD dependencies"
     echo "pip install -r $(repo_root)/requirements.txt"
     echo ""
     echo "# Install ViTPose"

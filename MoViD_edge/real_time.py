@@ -457,8 +457,8 @@ class OptimizedSequentialVideoProcessor:
                 logger.info(f"Skeleton video writer initialized: {self.output_skeleton_video_path}")
             
             if is_camera:
-                cv2.namedWindow('WHAM Real-time Tracking', cv2.WINDOW_NORMAL)
-                cv2.resizeWindow('WHAM Real-time Tracking', self.width, self.height)
+                cv2.namedWindow('MoViD Real-time Tracking', cv2.WINDOW_NORMAL)
+                cv2.resizeWindow('MoViD Real-time Tracking', self.width, self.height)
                 logger.info("Display window created")
         else:
             self.output_skeleton_video = None
@@ -576,7 +576,7 @@ class OptimizedSequentialVideoProcessor:
         
         img = frame.copy()
         
-        # Draw the skeleton using the network-produced joints2d, matching the demo behavior (the first 17 WHAM joints follow the COCO format)
+        # Draw the skeleton using the network-produced joints2d, matching the demo behavior (the first 17 MoViD joints follow the COCO format)
         joints2d_tensor = torch.from_numpy(joints2d).float().to(self.cfg.DEVICE)
         j2d = joints2d_tensor.reshape(-1, 2)
         n_j = min(17, j2d.shape[0])  # COCO 17 joints
@@ -1117,7 +1117,7 @@ class OptimizedSequentialVideoProcessor:
             img = self._visualize_frame(frame, frame_idx, joints2d, action_label, action_confidence, ntu_joints_2d=ntu_joints_2d)
             
             if is_camera and self.visualize:
-                cv2.imshow('WHAM Real-time Tracking', img)
+                cv2.imshow('MoViD Real-time Tracking', img)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     logger.info("User requested quit")
@@ -1193,7 +1193,7 @@ class OptimizedSequentialVideoProcessor:
             cv2.putText(img, "No Person Detected", (50, 50),
                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
             if is_camera:
-                cv2.imshow('WHAM Real-time Tracking', img)
+                cv2.imshow('MoViD Real-time Tracking', img)
                 cv2.waitKey(1)
         self._write_skeleton_frame(img)
         return img
@@ -1206,7 +1206,7 @@ class OptimizedSequentialVideoProcessor:
             cv2.putText(img, "Tracking Lost", (50, 50),
                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 165, 255), 2)
             if is_camera:
-                cv2.imshow('WHAM Real-time Tracking', img)
+                cv2.imshow('MoViD Real-time Tracking', img)
                 cv2.waitKey(1)
         self._write_skeleton_frame(img)
         return img
@@ -1458,7 +1458,7 @@ def run(cfg, video, output_pth, network, calib=None, window_size=50,
                   action_config=None, action_checkpoint=None, action_label_map=None, action_engine=None,
                   flip_select='all', flip_interval=5):
     """
-    Run the optimized WHAM processor
+    Run the optimized MoViD processor
     """
     start_total = time.time()
     
@@ -1552,7 +1552,7 @@ if __name__ == '__main__':
     logger.info(f'GPU name -> {torch.cuda.get_device_name()}')
     logger.info(f'GPU feat -> {torch.cuda.get_device_properties("cuda")}')
 
-    # Load WHAM model
+    # Load MoViD model
     smpl_batch_size = cfg.TRAIN.BATCH_SIZE * cfg.DATASET.SEQLEN
     smpl = build_body_model(cfg.DEVICE, smpl_batch_size)
     network = build_network(cfg, smpl)

@@ -9,10 +9,10 @@ cd /path/to/MoViD
 docker run -it -v .:/code/ --rm <your-movid-image> python
 ```
 
-The current compatibility API entrypoint is `wham_api.py`. You can call it like this:
+The current compatibility API entrypoint is `movid_api.py`. You can call it like this:
 ```bash
-from wham_api import WHAM_API
-movid_model = WHAM_API()
+from movid_api import MoViDAPI
+movid_model = MoViDAPI()
 input_video_path = '<input-video.mp4>'
 results, tracking_results, slam_results = movid_model(input_video_path)
 ```

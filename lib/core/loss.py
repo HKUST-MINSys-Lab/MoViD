@@ -12,13 +12,13 @@ from lib.utils.kp_utils import root_centering
 
 pelvis_idxs =[2,3]
 
-class WHAMLoss(nn.Module):
+class MoViDLoss(nn.Module):
     def __init__(
             self,
             cfg=None,
             device=None,
     ):
-        super(WHAMLoss, self).__init__()
+        super(MoViDLoss, self).__init__()
         
         self.cfg = cfg
         self.n_joints = _C.KEYPOINTS.NUM_JOINTS

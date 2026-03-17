@@ -1,5 +1,5 @@
 """
-Finetune STGCN++ model for action recognition using 3D skeleton data from WHAM
+Finetune STGCN++ model for action recognition using 3D skeleton data from MoViD
 """
 import os
 import sys
@@ -44,7 +44,7 @@ except ImportError as e:
 
 class SkeletonDataset(Dataset):
     """
-    Dataset for 3D skeleton sequences from WHAM
+    Dataset for 3D skeleton sequences from MoViD
     """
     def __init__(self, 
                  data_path: str,

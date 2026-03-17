@@ -11,7 +11,7 @@ TRAIN:
   LR: 1e-4
   LR_FINETUNE: 1e-5
   STAGE: 'stage2'
-  CHECKPOINT: 'checkpoints/wham_stage1.pth.tar'
+  CHECKPOINT: 'checkpoints/movid_stage1.pth.tar'
   BATCH_SIZE: 64
   END_EPOCH: 80
   MILESTONES: [40, 50, 70]

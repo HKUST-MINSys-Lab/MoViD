@@ -1,6 +1,6 @@
 """
-Prepare 3D skeleton data from WHAM outputs for action recognition training
-Extracts NTU 25 keypoints from WHAM predictions and saves in pyskl format
+Prepare 3D skeleton data from MoViD outputs for action recognition training
+Extracts NTU 25 keypoints from MoViD predictions and saves in pyskl format
 """
 import os
 import sys
@@ -23,16 +23,16 @@ from configs.config import get_cfg_defaults
 from lib.models import build_network, build_body_model
 
 
-def extract_ntu_joints_from_wham_output(wham_output_path: str, 
+def extract_ntu_joints_from_movid_output(movid_output_path: str, 
                                         network,
                                         device: str = 'cuda:0',
                                         window_size: int = 100) -> List[Dict]:
     """
-    Extract NTU 25 keypoints from WHAM output files
+    Extract NTU 25 keypoints from MoViD output files
     
     Args:
-        wham_output_path: Path to WHAM output directory or pickle file
-        network: WHAM network model
+        movid_output_path: Path to MoViD output directory or pickle file
+        network: MoViD network model
         device: Device to use
         window_size: Number of frames per sequence
         
@@ -41,39 +41,39 @@ def extract_ntu_joints_from_wham_output(wham_output_path: str,
     """
     data = []
     
-    # Load WHAM output
-    if os.path.isdir(wham_output_path):
+    # Load MoViD output
+    if os.path.isdir(movid_output_path):
         # Directory containing multiple output files
-        pkl_files = list(Path(wham_output_path).glob('*.pkl'))
-        logger.info(f"Found {len(pkl_files)} pickle files in {wham_output_path}")
+        pkl_files = list(Path(movid_output_path).glob('*.pkl'))
+        logger.info(f"Found {len(pkl_files)} pickle files in {movid_output_path}")
         
         for pkl_file in tqdm(pkl_files, desc="Processing files"):
             try:
-                wham_data = joblib.load(pkl_file)
-                sequences = extract_sequences_from_wham_data(wham_data, network, device, window_size)
+                movid_data = joblib.load(pkl_file)
+                sequences = extract_sequences_from_movid_data(movid_data, network, device, window_size)
                 data.extend(sequences)
             except Exception as e:
                 logger.warning(f"Failed to process {pkl_file}: {e}")
     else:
         # Single pickle file
-        logger.info(f"Loading WHAM output from {wham_output_path}")
-        wham_data = joblib.load(wham_output_path)
-        sequences = extract_sequences_from_wham_data(wham_data, network, device, window_size)
+        logger.info(f"Loading MoViD output from {movid_output_path}")
+        movid_data = joblib.load(movid_output_path)
+        sequences = extract_sequences_from_movid_data(movid_data, network, device, window_size)
         data.extend(sequences)
     
     return data
 
 
-def extract_sequences_from_wham_data(wham_data: Dict,
+def extract_sequences_from_movid_data(movid_data: Dict,
                                      network,
                                      device: str,
                                      window_size: int) -> List[Dict]:
     """
-    Extract skeleton sequences from WHAM data
+    Extract skeleton sequences from MoViD data
     
     Args:
-        wham_data: WHAM output dictionary
-        network: WHAM network model
+        movid_data: MoViD output dictionary
+        network: MoViD network model
         device: Device to use
         window_size: Number of frames per sequence
         
@@ -82,20 +82,20 @@ def extract_sequences_from_wham_data(wham_data: Dict,
     """
     sequences = []
     
-    # WHAM output format may vary, try different keys
-    if isinstance(wham_data, dict):
+    # MoViD output format may vary, try different keys
+    if isinstance(movid_data, dict):
         # Check for different possible formats
-        if 'frame_outputs' in wham_data:
+        if 'frame_outputs' in movid_data:
             # Format from real_time.py
-            frame_outputs = wham_data['frame_outputs']
+            frame_outputs = movid_data['frame_outputs']
             sequences = extract_from_frame_outputs(frame_outputs, network, device, window_size)
-        elif 'results' in wham_data:
+        elif 'results' in movid_data:
             # Format from demo.py
-            results = wham_data['results']
+            results = movid_data['results']
             sequences = extract_from_results(results, network, device, window_size)
         else:
             # Try to extract directly
-            sequences = extract_direct(wham_data, network, device, window_size)
+            sequences = extract_direct(movid_data, network, device, window_size)
     
     return sequences
 
@@ -200,12 +200,12 @@ def extract_from_results(results: Dict,
     return sequences
 
 
-def extract_direct(wham_data: Dict,
+def extract_direct(movid_data: Dict,
                   network,
                   device: str,
                   window_size: int) -> List[Dict]:
     """
-    Try to extract directly from wham_data
+    Try to extract directly from movid_data
     """
     sequences = []
     logger.warning("Direct extraction not fully implemented, please check data format")
@@ -213,15 +213,15 @@ def extract_direct(wham_data: Dict,
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Prepare action recognition data from WHAM outputs')
-    parser.add_argument('--wham_output', type=str, required=True,
-                        help='Path to WHAM output directory or pickle file')
+    parser = argparse.ArgumentParser(description='Prepare action recognition data from MoViD outputs')
+    parser.add_argument('--movid_output', type=str, required=True,
+                        help='Path to MoViD output directory or pickle file')
     parser.add_argument('--output', type=str, required=True,
                         help='Output pickle file path')
     parser.add_argument('--config', type=str, default='configs/yamls/stage2.yaml',
-                        help='Path to WHAM config file')
+                        help='Path to MoViD config file')
     parser.add_argument('--checkpoint', type=str, required=True,
-                        help='Path to WHAM checkpoint')
+                        help='Path to MoViD checkpoint')
     parser.add_argument('--window_size', type=int, default=100,
                         help='Number of frames per sequence')
     parser.add_argument('--device', type=str, default='cuda:0',
@@ -229,8 +229,8 @@ def main():
     
     args = parser.parse_args()
     
-    # Load WHAM model
-    logger.info("Loading WHAM model...")
+    # Load MoViD model
+    logger.info("Loading MoViD model...")
     cfg = get_cfg_defaults()
     cfg.merge_from_file(args.config)
     
@@ -249,9 +249,9 @@ def main():
     network = network.to(args.device)
     
     # Extract NTU joints
-    logger.info("Extracting NTU 25 keypoints from WHAM outputs...")
-    data = extract_ntu_joints_from_wham_output(
-        args.wham_output,
+    logger.info("Extracting NTU 25 keypoints from MoViD outputs...")
+    data = extract_ntu_joints_from_movid_output(
+        args.movid_output,
         network,
         args.device,
         args.window_size

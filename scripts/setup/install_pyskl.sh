@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-# Install pyskl into the existing wham conda environment
+# Install pyskl into the existing movid conda environment
 
 echo "======================================"
-echo "Install pyskl into the wham conda environment"
+echo "Install pyskl into the movid conda environment"
 echo "======================================"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common.sh"
 
-activate_conda_wham
+activate_conda_movid
 enter_repo_root
 
 # Check the Python version

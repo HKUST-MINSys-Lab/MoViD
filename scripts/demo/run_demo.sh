@@ -6,21 +6,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common.sh"
 
-activate_conda_wham
+activate_conda_movid
 enter_repo_root
 
 INPUT_PATH="${1:-examples}"
 OUTPUT_DIR="${2:-output/demo_batch}"
-WHAM_CHECKPOINT="${WHAM_CHECKPOINT:-$(default_wham_checkpoint)}"
+MOVID_CHECKPOINT="${MOVID_CHECKPOINT:-$(default_movid_checkpoint)}"
 
-require_file "${WHAM_CHECKPOINT}" "WHAM checkpoint"
+require_file "${MOVID_CHECKPOINT}" "MoViD checkpoint"
 mkdir -p "${OUTPUT_DIR}"
 
 if [ -f "${INPUT_PATH}" ]; then
     python demo.py \
         --video "${INPUT_PATH}" \
         --output_pth "${OUTPUT_DIR}" \
-        --checkpoint "${WHAM_CHECKPOINT}" \
+        --checkpoint "${MOVID_CHECKPOINT}" \
         --visualize \
         --estimate_local_only
     exit 0
@@ -38,7 +38,7 @@ for video in "${VIDEOS[@]}"; do
     python demo.py \
         --video "${video}" \
         --output_pth "${OUTPUT_DIR}" \
-        --checkpoint "${WHAM_CHECKPOINT}" \
+        --checkpoint "${MOVID_CHECKPOINT}" \
         --visualize \
         --estimate_local_only
 done

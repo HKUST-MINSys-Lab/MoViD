@@ -13,4 +13,4 @@ The main runtime entrypoints remain at the repository root:
 - `demo.py`
 - `train.py`
 - `batch_eval.py`
-- `wham_api.py` (compatibility API entrypoint)
+- `movid_api.py` (compatibility API entrypoint)

@@ -685,7 +685,7 @@ if __name__ == '__main__':
     # Create base output directory
     os.makedirs(args.output_base, exist_ok=True)
     
-    # ========= Load WHAM Models ========= #
+    # ========= Load MoViD Models ========= #
     logger.info("\n" + "="*60)
     logger.info("Loading Models...")
     logger.info("="*60)

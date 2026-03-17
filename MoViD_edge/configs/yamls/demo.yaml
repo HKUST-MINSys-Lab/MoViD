@@ -9,7 +9,7 @@ FLIP_EVAL: True
 TRAIN:
   STAGE: 'stage2'
   #CHECKPOINT: 'checkpoints/checkpoint.pth copy.tar'
-  #CHECKPOINT: '/home/dlq/WHAM/checkpoints/model_best_wo_feature.pth.tar'
-  CHECKPOINT: '/home/dlq/WHAM/checkpoints/model_best.pth.tar'
+  #CHECKPOINT: '/home/dlq/MoViD/checkpoints/model_best_wo_feature.pth.tar'
+  CHECKPOINT: '/home/dlq/MoViD/checkpoints/model_best.pth.tar'
 MODEL:
   BACKBONE: 'vit'

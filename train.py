@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from configs.config import parse_args
 from lib.core.trainer import Trainer
-from lib.core.loss import WHAMLoss
+from lib.core.loss import MoViDLoss
 
 from lib.utils.utils import prepare_output_dir
 from lib.data.dataloader import setup_dloaders
@@ -62,7 +62,7 @@ def main(cfg):
     )
     
     # ========= Loss function ========= #
-    criterion = WHAMLoss(cfg, cfg.DEVICE)
+    criterion = MoViDLoss(cfg, cfg.DEVICE)
     
     # ========= Start Training ========= #
     Trainer(

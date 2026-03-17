@@ -22,10 +22,10 @@ class SMPL(_SMPL):
         super(SMPL, self).__init__(*args, **kwargs)
         sys.stdout = sys.__stdout__
         
-        J_regressor_wham = np.load(_C.BMODEL.JOINTS_REGRESSOR_WHAM)
+        J_regressor_movid = np.load(_C.BMODEL.JOINTS_REGRESSOR_MOVID)
         J_regressor_eval = np.load(_C.BMODEL.JOINTS_REGRESSOR_H36M)
-        self.register_buffer('J_regressor_wham', torch.tensor(
-            J_regressor_wham, dtype=torch.float32))
+        self.register_buffer('J_regressor_movid', torch.tensor(
+            J_regressor_movid, dtype=torch.float32))
         self.register_buffer('J_regressor_eval', torch.tensor(
             J_regressor_eval, dtype=torch.float32))
         self.register_buffer('J_regressor_feet', torch.from_numpy(
@@ -131,7 +131,7 @@ class SMPL(_SMPL):
     def get_output(self, *args, **kwargs):
         kwargs['get_skin'] = True
         smpl_output = super(SMPL, self).forward(*args, **kwargs)
-        joints = vertices2joints(self.J_regressor_wham, smpl_output.vertices)
+        joints = vertices2joints(self.J_regressor_movid, smpl_output.vertices)
         feet = vertices2joints(self.J_regressor_feet, smpl_output.vertices)
         
         offset = joints[..., [11, 12], :].mean(-2)
@@ -154,7 +154,7 @@ class SMPL(_SMPL):
     def get_offset(self, *args, **kwargs):
         kwargs['get_skin'] = True
         smpl_output = super(SMPL, self).forward(*args, **kwargs)
-        joints = vertices2joints(self.J_regressor_wham, smpl_output.vertices)
+        joints = vertices2joints(self.J_regressor_movid, smpl_output.vertices)
         
         offset = joints[..., [11, 12], :].mean(-2)
         return offset
@@ -204,7 +204,7 @@ class SMPL(_SMPL):
             16: left_shoulder, 17: right_shoulder, 18: left_elbow, 19: right_elbow,
             20: left_wrist, 21: right_wrist, 22: left_hand, 23: right_hand
 
-        WHAM J_regressor_wham returns 31 joints in COCO format:
+        MoViD J_regressor_movid returns 31 joints in COCO format:
             0-16: COCO 17 joints (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles)
             17-30: Additional joints
 

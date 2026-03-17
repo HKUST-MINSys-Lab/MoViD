@@ -9,7 +9,7 @@ bash scripts/setup/install_pyskl.sh
 ## Method 2: Install manually
 
 ```bash
-conda activate wham
+conda activate movid
 cd ~
 git clone https://github.com/kennymckormick/pyskl.git
 cd pyskl

@@ -16,7 +16,7 @@ new_dataset = defaultdict(list)  # Use list as the default container
 tt = lambda x: torch.from_numpy(x).float()
 
 
-dataset = torch.load('/home/yjliu/data0/wham_1/dataset/parsed_data/totalcapture_processed.pth')
+dataset = torch.load('/home/yjliu/data0/movid_1/dataset/parsed_data/totalcapture_processed.pth')
 
 for i in range(len(dataset['res'])):
     res_tensor = dataset['res'][i].clone().detach().unsqueeze(0).repeat(len(dataset['kp2d'][i]), 1)
@@ -65,7 +65,7 @@ joblib.dump(new_dataset, 'dataset/parsed_data/totalcapture_train_vit.pth')
 
 # # Initialize the final dataset
 # final_dataset = defaultdict(list)
-# dataset = torch.load(f'/home/yjliu/data0/WHAM/dataset/parsed_data/freeman_train_smpl_06_vit.pth')
+# dataset = torch.load(f'/home/yjliu/data0/MoViD/dataset/parsed_data/freeman_train_smpl_06_vit.pth')
 # # Iterate over j = 0 to j = 10
 # for j in range(8):  # j from 0 to 10
 #     # Load dataset

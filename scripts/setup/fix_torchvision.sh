@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common.sh"
 
-activate_conda_wham
+activate_conda_movid
 
 # Upgrade torchvision
 pip install --upgrade torchvision==0.23.0

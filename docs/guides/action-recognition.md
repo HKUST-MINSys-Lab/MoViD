@@ -1,11 +1,11 @@
 # Action Recognition Guide
 
-MoViD can extract NTU-style 3D joints from WHAM output and run STGCN++ on top of those joints.
+MoViD can extract NTU-style 3D joints from MoViD output and run STGCN++ on top of those joints.
 
 ## Relevant Files
 
 - `lib/action_recognition.py`: online action-recognition wrapper
-- `tools/action/prepare_action_data.py`: convert WHAM outputs into training-ready skeleton data
+- `tools/action/prepare_action_data.py`: convert MoViD outputs into training-ready skeleton data
 - `tools/action/finetune_stgcn.py`: finetune STGCN++ on custom skeleton sequences
 - `tools/action/download_stgcn_model.py`: fetch pretrained STGCN++ assets
 
@@ -13,10 +13,10 @@ MoViD can extract NTU-style 3D joints from WHAM output and run STGCN++ on top of
 
 ```bash
 python tools/action/prepare_action_data.py \
-    --wham_output /path/to/wham_outputs \
+    --movid_output /path/to/movid_outputs \
     --output /path/to/action_data.pkl \
     --config configs/yamls/stage2.yaml \
-    --checkpoint /path/to/wham_checkpoint.pth.tar \
+    --checkpoint /path/to/movid_checkpoint.pth.tar \
     --window_size 100 \
     --device cuda:0
 ```

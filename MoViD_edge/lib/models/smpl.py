@@ -22,10 +22,10 @@ class SMPL(_SMPL):
         super(SMPL, self).__init__(*args, **kwargs)
         sys.stdout = sys.__stdout__
         
-        J_regressor_wham = np.load(_C.BMODEL.JOINTS_REGRESSOR_WHAM)
+        J_regressor_movid = np.load(_C.BMODEL.JOINTS_REGRESSOR_MOVID)
         J_regressor_eval = np.load(_C.BMODEL.JOINTS_REGRESSOR_H36M)
-        self.register_buffer('J_regressor_wham', torch.tensor(
-            J_regressor_wham, dtype=torch.float32))
+        self.register_buffer('J_regressor_movid', torch.tensor(
+            J_regressor_movid, dtype=torch.float32))
         self.register_buffer('J_regressor_eval', torch.tensor(
             J_regressor_eval, dtype=torch.float32))
         self.register_buffer('J_regressor_feet', torch.from_numpy(
@@ -124,7 +124,7 @@ class SMPL(_SMPL):
     def get_output(self, *args, **kwargs):
         kwargs['get_skin'] = True
         smpl_output = super(SMPL, self).forward(*args, **kwargs)
-        joints = vertices2joints(self.J_regressor_wham, smpl_output.vertices)
+        joints = vertices2joints(self.J_regressor_movid, smpl_output.vertices)
         feet = vertices2joints(self.J_regressor_feet, smpl_output.vertices)
         
         offset = joints[..., [11, 12], :].mean(-2)
@@ -147,7 +147,7 @@ class SMPL(_SMPL):
     def get_offset(self, *args, **kwargs):
         kwargs['get_skin'] = True
         smpl_output = super(SMPL, self).forward(*args, **kwargs)
-        joints = vertices2joints(self.J_regressor_wham, smpl_output.vertices)
+        joints = vertices2joints(self.J_regressor_movid, smpl_output.vertices)
         
         offset = joints[..., [11, 12], :].mean(-2)
         return offset
@@ -189,7 +189,7 @@ class SMPL(_SMPL):
             23: Tip of right hand
             24: Right thumb
 
-        WHAM J_regressor_wham returns 31 joints in COCO format:
+        MoViD J_regressor_movid returns 31 joints in COCO format:
             0-16: COCO 17 joints (nose, eyes, ears, shoulders, elbows, wrists, hips, knees, ankles)
             17-30: Additional joints
 
@@ -203,25 +203,25 @@ class SMPL(_SMPL):
             # Use pre-computed NTU regressor if available
             return vertices2joints(self.J_regressor_ntu, vertices)
         else:
-            # Get WHAM joints (31 joints: 17 COCO + 14 extra)
-            wham_joints = vertices2joints(self.J_regressor_wham, vertices)  # (..., 31, 3)
+            # Get MoViD joints (31 joints: 17 COCO + 14 extra)
+            movid_joints = vertices2joints(self.J_regressor_movid, vertices)  # (..., 31, 3)
 
             # Create NTU 25 joints array
-            ntu_joints = torch.zeros((*wham_joints.shape[:-2], 25, 3),
-                                    device=wham_joints.device,
-                                    dtype=wham_joints.dtype)
+            ntu_joints = torch.zeros((*movid_joints.shape[:-2], 25, 3),
+                                    device=movid_joints.device,
+                                    dtype=movid_joints.dtype)
 
-            # COCO indices (from WHAM 31 joints)
+            # COCO indices (from MoViD 31 joints)
             # 0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear,
             # 5: left_shoulder, 6: right_shoulder, 7: left_elbow, 8: right_elbow,
             # 9: left_wrist, 10: right_wrist, 11: left_hip, 12: right_hip,
             # 13: left_knee, 14: right_knee, 15: left_ankle, 16: right_ankle
 
             # NTU 0: Base of spine (pelvis) - use mid-point of hips
-            ntu_joints[..., 0, :] = (wham_joints[..., 11, :] + wham_joints[..., 12, :]) / 2.0  # mid hip
+            ntu_joints[..., 0, :] = (movid_joints[..., 11, :] + movid_joints[..., 12, :]) / 2.0  # mid hip
 
             # NTU 20: Spine (mid-spine) - between pelvis and neck
-            neck = (wham_joints[..., 5, :] + wham_joints[..., 6, :]) / 2.0  # mid shoulder as neck approximation
+            neck = (movid_joints[..., 5, :] + movid_joints[..., 6, :]) / 2.0  # mid shoulder as neck approximation
             pelvis = ntu_joints[..., 0, :]
             ntu_joints[..., 20, :] = (pelvis + neck) / 2.0  # Mid spine
 
@@ -232,35 +232,35 @@ class SMPL(_SMPL):
             ntu_joints[..., 2, :] = neck
 
             # NTU 3: Head - use nose position
-            ntu_joints[..., 3, :] = wham_joints[..., 0, :]  # nose
+            ntu_joints[..., 3, :] = movid_joints[..., 0, :]  # nose
 
             # NTU 4-7: Left arm (shoulder, elbow, wrist, hand)
-            ntu_joints[..., 4, :] = wham_joints[..., 5, :]   # left shoulder
-            ntu_joints[..., 5, :] = wham_joints[..., 7, :]   # left elbow
-            ntu_joints[..., 6, :] = wham_joints[..., 9, :]   # left wrist
+            ntu_joints[..., 4, :] = movid_joints[..., 5, :]   # left shoulder
+            ntu_joints[..., 5, :] = movid_joints[..., 7, :]   # left elbow
+            ntu_joints[..., 6, :] = movid_joints[..., 9, :]   # left wrist
             # Left hand - extend from wrist
-            ntu_joints[..., 7, :] = wham_joints[..., 9, :] + 0.1 * (wham_joints[..., 9, :] - wham_joints[..., 7, :])
+            ntu_joints[..., 7, :] = movid_joints[..., 9, :] + 0.1 * (movid_joints[..., 9, :] - movid_joints[..., 7, :])
 
             # NTU 8-11: Right arm (shoulder, elbow, wrist, hand)
-            ntu_joints[..., 8, :] = wham_joints[..., 6, :]   # right shoulder
-            ntu_joints[..., 9, :] = wham_joints[..., 8, :]   # right elbow
-            ntu_joints[..., 10, :] = wham_joints[..., 10, :] # right wrist
+            ntu_joints[..., 8, :] = movid_joints[..., 6, :]   # right shoulder
+            ntu_joints[..., 9, :] = movid_joints[..., 8, :]   # right elbow
+            ntu_joints[..., 10, :] = movid_joints[..., 10, :] # right wrist
             # Right hand - extend from wrist
-            ntu_joints[..., 11, :] = wham_joints[..., 10, :] + 0.1 * (wham_joints[..., 10, :] - wham_joints[..., 8, :])
+            ntu_joints[..., 11, :] = movid_joints[..., 10, :] + 0.1 * (movid_joints[..., 10, :] - movid_joints[..., 8, :])
 
             # NTU 12-15: Left leg (hip, knee, ankle, foot)
-            ntu_joints[..., 12, :] = wham_joints[..., 11, :]  # left hip
-            ntu_joints[..., 13, :] = wham_joints[..., 13, :]  # left knee
-            ntu_joints[..., 14, :] = wham_joints[..., 15, :]  # left ankle
+            ntu_joints[..., 12, :] = movid_joints[..., 11, :]  # left hip
+            ntu_joints[..., 13, :] = movid_joints[..., 13, :]  # left knee
+            ntu_joints[..., 14, :] = movid_joints[..., 15, :]  # left ankle
             # Left foot - extend from ankle
-            ntu_joints[..., 15, :] = wham_joints[..., 15, :] + 0.1 * (wham_joints[..., 15, :] - wham_joints[..., 13, :])
+            ntu_joints[..., 15, :] = movid_joints[..., 15, :] + 0.1 * (movid_joints[..., 15, :] - movid_joints[..., 13, :])
 
             # NTU 16-19: Right leg (hip, knee, ankle, foot)
-            ntu_joints[..., 16, :] = wham_joints[..., 12, :]  # right hip
-            ntu_joints[..., 17, :] = wham_joints[..., 14, :]  # right knee
-            ntu_joints[..., 18, :] = wham_joints[..., 16, :]  # right ankle
+            ntu_joints[..., 16, :] = movid_joints[..., 12, :]  # right hip
+            ntu_joints[..., 17, :] = movid_joints[..., 14, :]  # right knee
+            ntu_joints[..., 18, :] = movid_joints[..., 16, :]  # right ankle
             # Right foot - extend from ankle
-            ntu_joints[..., 19, :] = wham_joints[..., 16, :] + 0.1 * (wham_joints[..., 16, :] - wham_joints[..., 14, :])
+            ntu_joints[..., 19, :] = movid_joints[..., 16, :] + 0.1 * (movid_joints[..., 16, :] - movid_joints[..., 14, :])
 
             # NTU 21-22: Left hand tips (tip of left hand, left thumb)
             ntu_joints[..., 21, :] = ntu_joints[..., 7, :]  # same as left hand

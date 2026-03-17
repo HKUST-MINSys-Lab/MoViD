@@ -75,7 +75,7 @@
 # #     log("Combined dataset saved successfully!")
 
 # # if __name__ == "__main__":
-# #     output_dir = '/home/yjliu/data0/wham_1/dataset/parsed_data/'
+# #     output_dir = '/home/yjliu/data0/movid_1/dataset/parsed_data/'
     
 # #     # Stack the first three views (0, 1, 2)
 # #     stack_view_datasets(
@@ -152,8 +152,8 @@ import datetime
 #     log("Dataset saved successfully!")
 
 # if __name__ == "__main__":
-#     input_path = '/home/yjliu/data0/wham_1/dataset/parsed_data/humman_train_vit_combined_views1469.pth'
-#     output_path = '/home/yjliu/data0/wham_1/dataset/parsed_data/humman_train_vit_combined_views1469_stacked.pth'
+#     input_path = '/home/yjliu/data0/movid_1/dataset/parsed_data/humman_train_vit_combined_views1469.pth'
+#     output_path = '/home/yjliu/data0/movid_1/dataset/parsed_data/humman_train_vit_combined_views1469_stacked.pth'
     
 #     # Process the dataset, concatenating along the last dimension
 #     stack_or_concatenate_dataset(input_path, output_path, dim=0)

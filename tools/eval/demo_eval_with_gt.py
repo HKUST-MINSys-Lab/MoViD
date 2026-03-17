@@ -730,14 +730,14 @@ def match_pred_to_gt_batch(pred_joints_batch, pred_verts_batch, frame_ids,
     return best_match_person, best_metrics
 
 
-def evaluate_wham_output(wham_pkl_path, root_dir, camera_name='aria01',
+def evaluate_movid_output(movid_pkl_path, root_dir, camera_name='aria01',
                          pelvis_idxs=[2, 3], j_regressor_path=None,
                          apply_rotation=True):
     """
-    Evaluate WHAM output against ground truth SMPL data (NPZ format)
+    Evaluate MoViD output against ground truth SMPL data (NPZ format)
     
     Args:
-        wham_pkl_path: Path to wham_output.pkl
+        movid_pkl_path: Path to movid_output.pkl
         root_dir: Root directory containing processed_data/smpl_3d_points/
         camera_name: Name of the aria camera perspective (e.g., 'aria01')
         pelvis_idxs: Indices of pelvis joints for alignment (default [2, 3] for H36M-14)
@@ -776,9 +776,9 @@ def evaluate_wham_output(wham_pkl_path, root_dir, camera_name='aria01',
     print(f"\nLoaded GT data for {len(gt_data_all)} subjects")
     print()
     
-    # Load WHAM predictions
-    print(f"Loading WHAM predictions from {wham_pkl_path}")
-    wham_results = joblib.load(wham_pkl_path)
+    # Load MoViD predictions
+    print(f"Loading MoViD predictions from {movid_pkl_path}")
+    movid_results = joblib.load(movid_pkl_path)
     
     # Initialize metrics storage
     all_mpjpe = []
@@ -789,11 +789,11 @@ def evaluate_wham_output(wham_pkl_path, root_dir, camera_name='aria01',
     match_statistics = {}
     track_results = []
     
-    print(f"\nEvaluating {len(wham_results)} track predictions...")
+    print(f"\nEvaluating {len(movid_results)} track predictions...")
     print(f"Matching criterion: PA-MPJPE (joint-based)")
     print(f"PA-PVE: Uses joint alignment parameters (correct method)\n")
     
-    for track_id, pred_data in wham_results.items():
+    for track_id, pred_data in movid_results.items():
         frame_ids = pred_data['frame_ids']
         
         # Convert to numpy array if needed
@@ -912,7 +912,7 @@ def evaluate_wham_output(wham_pkl_path, root_dir, camera_name='aria01',
                 pred_joints_subset = pred_joints_subset[:, :min_joints, :]
                 gt_joints_subset = gt_joints_subset[:, :min_joints, :]
                 
-                output_dir = osp.dirname(wham_pkl_path)
+                output_dir = osp.dirname(movid_pkl_path)
                 vis_path = osp.join(output_dir, f'alignment_track_{track_id}_frame_{frame_ids[valid_pred_indices[vis_idx]]}.png')
                 
                 visualize_alignment(
@@ -1020,7 +1020,7 @@ def evaluate_wham_output(wham_pkl_path, root_dir, camera_name='aria01',
                 'max': float(np.max(all_pa_pve))
             }
         
-        output_dir = osp.dirname(wham_pkl_path)
+        output_dir = osp.dirname(movid_pkl_path)
         results_path = osp.join(output_dir, 'evaluation_results.pkl')
         joblib.dump(results_dict, results_path)
         print(f"\nResults saved to {results_path}")
@@ -1046,8 +1046,8 @@ def evaluate_wham_output(wham_pkl_path, root_dir, camera_name='aria01',
 
 if __name__ == "__main__":
     # Configuration
-    #wham_pkl_path = "/home/yjliu/data0/wham_1/output/demo/output/wham_output.pkl"
-    wham_pkl_path = "/home/yjliu/data0/wham_2/output/demo/output/wham_output.pkl"
+    #movid_pkl_path = "/home/yjliu/data0/movid_1/output/demo/output/movid_output.pkl"
+    movid_pkl_path = "/home/yjliu/data0/movid_2/output/demo/output/movid_output.pkl"
     root_dir = "/data/yjliu/01_tagging/001_tagging"
     camera_name = "aria01"  # Camera perspective used for GT data
     
@@ -1059,12 +1059,12 @@ if __name__ == "__main__":
     # j_regressor_path = "data/body_models/J_regressor_h3m.npy"
     
     # 3D Rotation for aria01_rgb camera
-    # Set to True if your WHAM predictions are based on rotated aria01 images
+    # Set to True if your MoViD predictions are based on rotated aria01 images
     # Set to False if predictions are based on original (non-rotated) images
     apply_rotation = True  # Default: True for aria01, False for other cameras
     
     print("="*60)
-    print("WHAM Evaluation with GT SMPL Data (NPZ Format)")
+    print("MoViD Evaluation with GT SMPL Data (NPZ Format)")
     print("="*60)
     print(f"Camera perspective: {camera_name}")
     print(f"Using H36M-14 joint format")
@@ -1083,8 +1083,8 @@ if __name__ == "__main__":
         print(f"   Using original GT coordinates (no rotation)")
     print("="*60 + "\n")
     
-    results = evaluate_wham_output(
-        wham_pkl_path, 
+    results = evaluate_movid_output(
+        movid_pkl_path, 
         root_dir,
         camera_name=camera_name,
         pelvis_idxs=pelvis_idxs,

@@ -34,7 +34,7 @@ class SimpleTensorRTDetection:
     def setup_paths(self):
         """Configure paths"""
         # Use absolute paths
-        self.base_dir = Path("/home/dlq/WHAM")
+        self.base_dir = Path("/home/dlq/MoViD")
         self.checkpoints_dir = self.base_dir / "checkpoints"
         self.engines_dir = self.base_dir / "engines"
         

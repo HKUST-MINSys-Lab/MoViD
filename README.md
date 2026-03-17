@@ -45,7 +45,7 @@ This repository has been cleaned up for GitHub so that source code, configs, doc
 |-- batch_eval.py
 |-- demo.py
 |-- train.py
-`-- wham_api.py
+`-- movid_api.py
 ```
 
 ## Quick Start
@@ -105,8 +105,8 @@ The `.gitignore` now excludes:
 - temporary HTML/cookie/debug files
 - local backup scripts under `.local/`
 
-If you already have local weights, place them under `checkpoints/` or use environment variables such as `WHAM_CHECKPOINT` and `ACTION_CHECKPOINT` when running the helper scripts.
+If you already have local weights, place them under `checkpoints/` or use environment variables such as `MOVID_CHECKPOINT` and `ACTION_CHECKPOINT` when running the helper scripts.
 
 ## Third-Party Components
 
-MoViD keeps upstream third-party components such as [WHAM](https://github.com/yohanshin/WHAM), DPVO, and ViTPose under `third-party/`. Their original licenses and attribution remain with those components, while the repository structure, entrypoints, and workflow documentation in this repo are organized around MoViD itself.
+MoViD keeps its upstream motion-reconstruction component, DPVO, and ViTPose under `third-party/`. Their original licenses and attribution remain with those components, while the repository structure, entrypoints, and workflow documentation in this repo are organized around MoViD itself.

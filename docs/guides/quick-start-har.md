@@ -22,8 +22,8 @@ bash scripts/demo/run_demo_with_har.sh /path/to/video.mp4 output/my_demo
 
 ## 3. Expected outputs
 
-- `wham_output.pkl`
+- `movid_output.pkl`
 - `action_recognition_summary.pkl` when HAR assets are available
 - visualization videos when `--visualize` is enabled
 
-If the action-recognition checkpoint or label map is missing, the wrapper script automatically falls back to WHAM-only inference.
+If the action-recognition checkpoint or label map is missing, the wrapper script automatically falls back to MoViD-only inference.

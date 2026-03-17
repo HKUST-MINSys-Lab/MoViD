@@ -46,7 +46,7 @@ def main(cfg, args):
     eval_loader = setup_eval_dataloader(cfg, '3dpw', 'test', cfg.MODEL.BACKBONE)
     logger.info(f'Dataset loaded')
     
-    # ========= Load WHAM ========= #
+    # ========= Load MoViD ========= #
     smpl_batch_size = cfg.TRAIN.BATCH_SIZE * cfg.DATASET.SEQLEN
     smpl = build_body_model(cfg.DEVICE, smpl_batch_size)
     network = build_network(cfg, smpl)

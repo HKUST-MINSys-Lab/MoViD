@@ -1,6 +1,6 @@
 # MoViD Edge
 
-`MoViD_edge` is the edge-side inference project for MoViD. At the moment, the active maintained entrypoints are `real_time.py` and `demo.py`.
+`MoViD_edge` is the edge-side inference project for MoViD. The active maintained entrypoints are `real_time.py` and `demo.py`, and training / evaluation utilities have been retired out of the active tree into `.local/retired_*`.
 
 ## Active Entry Points
 
@@ -47,6 +47,7 @@ python3 real_time.py --video realsense --visualize --max_frames 1000
 |-- docs/
 |   `-- guides/
 |-- lib/
+|   `-- data/
 |-- models/
 |   `-- action_recognition/
 |-- tools/

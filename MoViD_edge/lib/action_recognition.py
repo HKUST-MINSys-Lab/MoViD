@@ -1,6 +1,6 @@
 """
 Action Recognition Module using pyskl
-Converts WHAM 3D skeleton output to pyskl format and performs action recognition
+Converts MoViD 3D skeleton output to pyskl format and performs action recognition
 """
 import os
 import sys
@@ -28,7 +28,7 @@ except ImportError as e:
 class ActionRecognizer:
     """
     Action Recognition using pyskl models
-    Converts WHAM 3D skeleton (joints3d) to pyskl format and performs inference
+    Converts MoViD 3D skeleton (joints3d) to pyskl format and performs inference
     """
     
     def __init__(self, 
@@ -101,11 +101,11 @@ class ActionRecognizer:
         self.current_action: str = "waiting..."
         self.current_confidence: float = 0.0
         
-    def convert_wham_to_pyskl_format(self, joints3d: np.ndarray) -> np.ndarray:
+    def convert_movid_to_pyskl_format(self, joints3d: np.ndarray) -> np.ndarray:
         """
-        Convert WHAM joints3d to pyskl format
+        Convert MoViD joints3d to pyskl format
         
-        WHAM joints3d shape: (batch, num_joints, 3) or (num_joints, 3)
+        MoViD joints3d shape: (batch, num_joints, 3) or (num_joints, 3)
         pyskl keypoint format: (M, T, V, C) where:
             M = number of persons (usually 1)
             T = number of frames
@@ -113,7 +113,7 @@ class ActionRecognizer:
             C = coordinates (3 for 3D)
         
         Args:
-            joints3d: 3D joints from WHAM output, shape (num_joints, 3) or (batch, num_joints, 3)
+            joints3d: 3D joints from MoViD output, shape (num_joints, 3) or (batch, num_joints, 3)
             
         Returns:
             keypoint array in pyskl format: (1, 1, V, 3)
@@ -166,9 +166,9 @@ class ActionRecognizer:
         Add a skeleton frame to the buffer (real-time updates)
         
         Args:
-            joints3d: 3D joints from WHAM, shape (num_joints, 3) or (batch, num_joints, 3)
+            joints3d: 3D joints from MoViD, shape (num_joints, 3) or (batch, num_joints, 3)
         """
-        keypoint = self.convert_wham_to_pyskl_format(joints3d)
+        keypoint = self.convert_movid_to_pyskl_format(joints3d)
         # Extract single frame: (1, V, 3)
         frame_keypoint = keypoint[0, 0, :, :]  # (V, 3)
         

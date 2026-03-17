@@ -6,12 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common.sh"
 
-activate_conda_wham
+activate_conda_movid
 enter_repo_root
 
 ASD_DIR="${ASD_DIR:-$(repo_root)/ASD}"
 OUTPUT_DIR="${OUTPUT_DIR:-${ASD_DIR}/output}"
-WHAM_CHECKPOINT="${WHAM_CHECKPOINT:-$(default_wham_checkpoint)}"
+MOVID_CHECKPOINT="${MOVID_CHECKPOINT:-$(default_movid_checkpoint)}"
 ACTION_CONFIG="${ACTION_CONFIG:-$(default_action_config)}"
 ACTION_CHECKPOINT="${ACTION_CHECKPOINT:-$(default_action_checkpoint)}"
 ACTION_LABEL_MAP="${ACTION_LABEL_MAP:-$(default_action_label_map)}"
@@ -19,7 +19,7 @@ DISABLE_VISUALIZE="${DISABLE_VISUALIZE:-false}"
 USE_SKELETON_ONLY="${USE_SKELETON_ONLY:-false}"
 EXTRA_DEMO_ARGS="${EXTRA_DEMO_ARGS:-}"
 
-require_file "${WHAM_CHECKPOINT}" "WHAM checkpoint"
+require_file "${MOVID_CHECKPOINT}" "MoViD checkpoint"
 
 ACTION_ARGS=()
 if [ -f "${ACTION_CONFIG}" ] && [ -f "${ACTION_CHECKPOINT}" ] && [ -f "${ACTION_LABEL_MAP}" ]; then
@@ -29,7 +29,7 @@ if [ -f "${ACTION_CONFIG}" ] && [ -f "${ACTION_CHECKPOINT}" ] && [ -f "${ACTION_
         --action_label_map "${ACTION_LABEL_MAP}"
     )
 else
-    echo "Action recognition assets are missing, continuing with WHAM only."
+    echo "Action recognition assets are missing, continuing with MoViD only."
 fi
 
 mkdir -p "${OUTPUT_DIR}"
@@ -63,7 +63,7 @@ for i in "${!VIDEOS[@]}"; do
     python demo.py \
         --video "${video}" \
         --output_pth "${OUTPUT_DIR}" \
-        --checkpoint "${WHAM_CHECKPOINT}" \
+        --checkpoint "${MOVID_CHECKPOINT}" \
         --save_pkl \
         "${VIS_ARGS[@]}" \
         "${EXTRA_ARGS[@]}" \

@@ -21,7 +21,7 @@ smpl = {
 }
 kp3d = {}
 for view_id in range(4):
-    dataset = joblib.load(f'/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_train_vit_view{view_id}_temp.pth')
+    dataset = joblib.load(f'/home/yjliu/data0/movid_1/dataset/parsed_data/human36m_train_vit_view{view_id}_temp.pth')
     dataset['init_kp3d'] = []
     dataset['init_pose'] = []
 
@@ -38,4 +38,4 @@ for view_id in range(4):
     kp3d[view_id] = pred_output.joints
 
 
-torch.save(kp3d, '/home/yjliu/data0/wham_1/kp3d_h36m_view.pth')
+torch.save(kp3d, '/home/yjliu/data0/movid_1/kp3d_h36m_view.pth')

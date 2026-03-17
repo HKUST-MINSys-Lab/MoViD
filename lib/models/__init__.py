@@ -19,7 +19,7 @@ def build_body_model(device, batch_size=1, gender='neutral', **kwargs):
 
 
 def build_network(cfg, smpl):
-    from .wham import Network
+    from .movid import Network
     
     with open(cfg.MODEL_CONFIG, 'r') as f:
         model_config = yaml.safe_load(f)

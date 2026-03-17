@@ -186,7 +186,7 @@ def run(cfg,
     # Build dataset
     dataset = CustomDataset(cfg, tracking_results, slam_results, width, height, fps)
     
-    # run WHAM
+    # run MoViD
     results = defaultdict(dict)
     
     n_subjs = len(dataset)
@@ -198,7 +198,7 @@ def run(cfg,
                 if jetson_ctx:
                     stats = collect_jetson_stats(jetson_ctx)
                     if stats:
-                        stats['phase'] = 'wham_inference_flipped'
+                        stats['phase'] = 'movid_inference_flipped'
                         stats['subject_idx'] = subj
                         jetson_resource_log.append(stats)
                 
@@ -211,7 +211,7 @@ def run(cfg,
                 if jetson_ctx:
                     stats = collect_jetson_stats(jetson_ctx)
                     if stats:
-                        stats['phase'] = 'wham_inference_normal'
+                        stats['phase'] = 'movid_inference_normal'
                         stats['subject_idx'] = subj
                         jetson_resource_log.append(stats)
                 
@@ -224,7 +224,7 @@ def run(cfg,
                 if jetson_ctx:
                     stats = collect_jetson_stats(jetson_ctx)
                     if stats:
-                        stats['phase'] = 'wham_post_inference'
+                        stats['phase'] = 'movid_post_inference'
                         stats['subject_idx'] = subj
                         jetson_resource_log.append(stats)
                 
@@ -248,7 +248,7 @@ def run(cfg,
                 if jetson_ctx:
                     stats = collect_jetson_stats(jetson_ctx)
                     if stats:
-                        stats['phase'] = 'wham_inference'
+                        stats['phase'] = 'movid_inference'
                         stats['subject_idx'] = subj
                         jetson_resource_log.append(stats)
                 
@@ -263,7 +263,7 @@ def run(cfg,
                 if jetson_ctx:
                     stats = collect_jetson_stats(jetson_ctx)
                     if stats:
-                        stats['phase'] = 'wham_post_inference'
+                        stats['phase'] = 'movid_post_inference'
                         stats['subject_idx'] = subj
                         jetson_resource_log.append(stats)
         
@@ -309,7 +309,7 @@ def run(cfg,
             results[_id]['trans_world'] = pred['trans_world'].cpu().squeeze(0).numpy()
 
     if save_pkl:
-        joblib.dump(results, osp.join(output_pth, "wham_output.pkl"))
+        joblib.dump(results, osp.join(output_pth, "movid_output.pkl"))
      
     # Visualize
     if visualize:
@@ -421,7 +421,7 @@ if __name__ == '__main__':
     logger.info(f'GPU name -> {torch.cuda.get_device_name()}')
     logger.info(f'GPU feat -> {torch.cuda.get_device_properties("cuda")}')    
     
-    # ========= Load WHAM ========= #
+    # ========= Load MoViD ========= #
     smpl_batch_size = cfg.TRAIN.BATCH_SIZE * cfg.DATASET.SEQLEN
     smpl = build_body_model(cfg.DEVICE, smpl_batch_size)
     network = build_network(cfg, smpl)

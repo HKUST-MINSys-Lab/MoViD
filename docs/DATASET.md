@@ -15,7 +15,7 @@ First, visit [TCMR](https://github.com/hongsukchoi/TCMR_RELEASE) and download pr
 
 Next, prepare 2D keypoints detection using [ViTPose](https://github.com/ViTAE-Transformer/ViTPose) and store the results at `dataset/detection_results/\<DATAsET-NAME>/\<SEQUENCE_NAME.npy>'. You may need to download all images to prepare the detection results.
 
-For Human36M, MPII3D, and InstaVariety datasets, you need to also download [NeuralAnnot](https://github.com/mks0601/NeuralAnnot_RELEASE) pseudo groundtruth SMPL label. As mentioned in our paper, we do not supervise WHAM on this label, but use it for neural initialization step.
+For Human36M, MPII3D, and InstaVariety datasets, you need to also download [NeuralAnnot](https://github.com/mks0601/NeuralAnnot_RELEASE) pseudo groundtruth SMPL label. As mentioned in our paper, we do not supervise MoViD on this label, but use it for neural initialization step.
 
 Finally, run following codes to preprocess all training data.
 ```bash

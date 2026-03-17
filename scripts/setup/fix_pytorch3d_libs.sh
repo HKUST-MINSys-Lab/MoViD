@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common.sh"
 
-activate_conda_wham
+activate_conda_movid
 
 # Path to torch lib directory
 TORCH_LIB_DIR="${CONDA_PREFIX}/lib/python3.9/site-packages/torch/lib"

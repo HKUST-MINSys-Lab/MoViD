@@ -6,11 +6,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common.sh"
 
-activate_conda_wham
+activate_conda_movid
 enter_repo_root
 
 TRAIN_CFG="${TRAIN_CFG:-configs/yamls/stage2.yaml}"
-INIT_CHECKPOINT="${INIT_CHECKPOINT:-checkpoints/wham_stage1.tar.pth}"
+INIT_CHECKPOINT="${INIT_CHECKPOINT:-checkpoints/movid_stage1.tar.pth}"
 
 require_file "${TRAIN_CFG}" "Training config"
 require_file "${INIT_CHECKPOINT}" "Stage 1 checkpoint"

@@ -13,7 +13,7 @@ enter_repo_root() {
     cd "${ROOT_DIR}"
 }
 
-activate_conda_wham() {
+activate_conda_movid() {
     local candidate
 
     if ! command -v conda >/dev/null 2>&1; then
@@ -30,15 +30,15 @@ activate_conda_wham() {
     fi
 
     if command -v conda >/dev/null 2>&1; then
-        conda activate "${CONDA_ENV_NAME:-wham}" >/dev/null 2>&1 || true
+        conda activate "${CONDA_ENV_NAME:-movid}" >/dev/null 2>&1 || true
     fi
 }
 
-default_wham_checkpoint() {
+default_movid_checkpoint() {
     local path
     for path in \
-        "${ROOT_DIR}/checkpoints/wham_vit_w_3dpw.pth.tar" \
-        "${ROOT_DIR}/checkpoints/wham_stage1.tar.pth"
+        "${ROOT_DIR}/checkpoints/movid_vit_w_3dpw.pth.tar" \
+        "${ROOT_DIR}/checkpoints/movid_stage1.tar.pth"
     do
         if [ -f "${path}" ]; then
             printf '%s\n' "${path}"
@@ -46,7 +46,7 @@ default_wham_checkpoint() {
         fi
     done
 
-    printf '%s\n' "${ROOT_DIR}/checkpoints/wham_vit_w_3dpw.pth.tar"
+    printf '%s\n' "${ROOT_DIR}/checkpoints/movid_vit_w_3dpw.pth.tar"
 }
 
 default_action_config() {

@@ -43,7 +43,7 @@ def load_video(video):
     return cap, fps, length, width, height
 
 
-class WHAM_API(object):
+class MoViDAPI(object):
     def __init__(self):
         self.cfg = prepare_cfg()
         self.network = build_network(self.cfg, build_body_model(self.cfg.DEVICE, self.cfg.TRAIN.BATCH_SIZE * self.cfg.DATASET.SEQLEN))
@@ -90,11 +90,11 @@ class WHAM_API(object):
         return tracking_results, slam_results
     
     @torch.no_grad()
-    def wham_inference(self, tracking_results, slam_results, width, height, fps, output_dir):
+    def movid_inference(self, tracking_results, slam_results, width, height, fps, output_dir):
         # Build dataset
         dataset = CustomDataset(self.cfg, tracking_results, slam_results, width, height, fps)
         
-        # run WHAM
+        # run MoViD
         results = defaultdict(dict)
         for batch in dataset:
             if batch is None: break
@@ -113,7 +113,7 @@ class WHAM_API(object):
             results[_id]['trans_world'] = pred['trans_world'].cpu().squeeze(0).numpy()
             results[_id]['frame_id'] = frame_id
         
-        joblib.dump(slam_results, osp.join(output_dir, 'wham_results.pth'))
+        joblib.dump(slam_results, osp.join(output_dir, 'movid_results.pth'))
         return results
     
     @torch.no_grad()
@@ -129,8 +129,8 @@ class WHAM_API(object):
         # preprocessing to get detection, tracking, slam results and image features from video input
         tracking_results, slam_results = self.preprocessing(video, cap, fps, length, output_dir)
 
-        # WHAM forward inference to get the results
-        results = self.wham_inference(tracking_results, slam_results, width, height, fps, output_dir)
+        # MoViD forward inference to get the results
+        results = self.movid_inference(tracking_results, slam_results, width, height, fps, output_dir)
         
         # Visualize
         if visualize:
@@ -141,7 +141,7 @@ class WHAM_API(object):
 
 
 if __name__ == '__main__':
-    #from wham_api import WHAM_API
-    wham_model = WHAM_API()
+    #from movid_api import MoViDAPI
+    movid_model = MoViDAPI()
     input_video_path = 'examples/IMG_9732.mov'
-    results, tracking_results, slam_results = wham_model(input_video_path)
+    results, tracking_results, slam_results = movid_model(input_video_path)

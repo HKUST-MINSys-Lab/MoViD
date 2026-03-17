@@ -59,14 +59,14 @@ import datetime
 #         del full_data  # Free memory after each chunk
 
 # if __name__ == "__main__":
-#     input_path = '/data/yjliu/wham/dataset/parsed_data/human36m_train_vit.pth'
-#     output_dir = '/data/yjliu/wham/dataset/parsed_data/'
+#     input_path = '/data/yjliu/movid/dataset/parsed_data/human36m_train_vit.pth'
+#     output_dir = '/data/yjliu/movid/dataset/parsed_data/'
 #     split_dataset_low_mem(input_path, output_dir)
 
 
 
-# dataset = joblib.load('/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_train_vit_view0_temp.pth')
-# # dataset = joblib.load('/home/yjliu/data0/wham_1/dataset/parsed_data/3dpw_test_vit.pth')
+# dataset = joblib.load('/home/yjliu/data0/movid_1/dataset/parsed_data/human36m_train_vit_view0_temp.pth')
+# # dataset = joblib.load('/home/yjliu/data0/movid_1/dataset/parsed_data/3dpw_test_vit.pth')
 # frame_id = list(dataset['frame_id'])
 
 # indices = [i for i, f in enumerate(frame_id) if torch.equal(f, torch.tensor(0))]
@@ -88,7 +88,7 @@ import datetime
 #         # Slice by interval, with each segment stored as a list element
 #         new_dataset[key].append(dataset[key][start:end])
 # # Save as a joblib file (list of dicts)
-# joblib.dump(new_dataset, '/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_test_vit.pth')
+# joblib.dump(new_dataset, '/home/yjliu/data0/movid_1/dataset/parsed_data/human36m_test_vit.pth')
 
 
 
@@ -287,8 +287,8 @@ if __name__ == "__main__":
     except RuntimeError:
         pass  # Already set
     
-    data_path = '/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_view3_test_vit.pth'
-    save_path = '/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_test_vit.pth'
+    data_path = '/home/yjliu/data0/movid_1/dataset/parsed_data/human36m_view3_test_vit.pth'
+    save_path = '/home/yjliu/data0/movid_1/dataset/parsed_data/human36m_test_vit.pth'
     
     # Process dataset using all available GPUs
     process_dataset(data_path, save_path, num_gpus=8)
@@ -372,7 +372,7 @@ if __name__ == "__main__":
 #     log("Combined dataset saved successfully!")
 
 # if __name__ == "__main__":
-#     output_dir = '/home/yjliu/data0/wham_1/dataset/parsed_data/'
+#     output_dir = '/home/yjliu/data0/movid_1/dataset/parsed_data/'
     
 #     # Stack the first three views (0, 1, 2)
 #     stack_view_datasets(
@@ -448,8 +448,8 @@ if __name__ == "__main__":
 #     log("Dataset saved successfully!")
 
 # if __name__ == "__main__":
-#     input_path = '/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_view012_train_vit.pth'
-#     output_path = '/home/yjliu/data0/wham_1/dataset/parsed_data/human36m_view012_train_vit_stacked.pth'
+#     input_path = '/home/yjliu/data0/movid_1/dataset/parsed_data/human36m_view012_train_vit.pth'
+#     output_path = '/home/yjliu/data0/movid_1/dataset/parsed_data/human36m_view012_train_vit_stacked.pth'
     
 #     # Process the dataset, concatenating along the last dimension
 #     stack_or_concatenate_dataset(input_path, output_path, dim=0)

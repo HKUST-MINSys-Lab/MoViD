@@ -35,7 +35,7 @@ from lib.utils.utils import prepare_batch
 from lib.utils.imutils import avg_preds
 
 """
-This is a tentative script to evaluate WHAM on EMDB dataset.
+This is a tentative script to evaluate MoViD on EMDB dataset.
 Current implementation requires EMDB dataset downloaded at ./datasets/EMDB/
 """
 
@@ -52,7 +52,7 @@ def main(cfg, args):
     eval_loader = setup_eval_dataloader(cfg, 'emdb', args.eval_split, cfg.MODEL.BACKBONE)
     logger.info(f'Dataset loaded')
     
-    # ========= Load WHAM ========= #
+    # ========= Load MoViD ========= #
     smpl_batch_size = cfg.TRAIN.BATCH_SIZE * cfg.DATASET.SEQLEN
     smpl = build_body_model(cfg.DEVICE, smpl_batch_size)
     network = build_network(cfg, smpl)
@@ -64,7 +64,7 @@ def main(cfg, args):
     # Load vertices -> joints regression matrix to evaluate
     pelvis_idxs = [1, 2]
     
-    # WHAM uses Y-down coordinate system, while EMDB dataset uses Y-up one.
+    # MoViD uses Y-down coordinate system, while EMDB dataset uses Y-up one.
     yup2ydown = transforms.axis_angle_to_matrix(torch.tensor([[np.pi, 0, 0]])).float().to(cfg.DEVICE)
     
     # To torch tensor function
@@ -138,7 +138,7 @@ def main(cfg, args):
             target_j3d_cam = target_cam.joints[:, :24][masks]
             # =======>
             
-            # Convert WHAM global orient to Y-up coordinate
+            # Convert MoViD global orient to Y-up coordinate
             poses_root = pred['poses_root_world'].squeeze(0)
             pred_trans = pred['trans_world'].squeeze(0)
             poses_root = yup2ydown.mT @ poses_root
