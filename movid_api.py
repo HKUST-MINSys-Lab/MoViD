@@ -6,6 +6,7 @@ import argparse
 import os.path as osp
 from glob import glob
 from collections import defaultdict
+from pathlib import Path
 
 import cv2
 import torch
@@ -15,7 +16,7 @@ import numpy as np
 from smplx import SMPL
 from loguru import logger
 
-from configs.config import get_cfg_defaults
+from configs.config import get_cfg_defaults, resolve_cfg_paths
 from lib.data.datasets import CustomDataset
 from lib.models import build_network, build_body_model
 from lib.models.preproc.detector import DetectionModel
@@ -28,10 +29,37 @@ except:
     logger.info('DPVO is not properly installed. Only estimate in local coordinates !')
     _run_global = False
 
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _resolve_cli_path(path_value):
+    if not path_value:
+        return path_value
+
+    path = Path(path_value)
+    if path.is_absolute():
+        return str(path)
+
+    for root in (Path.cwd(), REPO_ROOT):
+        candidate = (root / path).resolve()
+        if candidate.exists():
+            return str(candidate)
+
+    return path_value
+
+
+def _prepare_runtime_cfg(cfg):
+    cfg = resolve_cfg_paths(cfg)
+    if str(cfg.DEVICE).startswith('cuda') and not torch.cuda.is_available():
+        cfg = cfg.clone()
+        logger.warning('CUDA was requested but is not available. Falling back to CPU.')
+        cfg.DEVICE = 'cpu'
+    return cfg
+
 def prepare_cfg():
     cfg = get_cfg_defaults()
-    cfg.merge_from_file('configs/yamls/demo.yaml')
-    return cfg
+    cfg.merge_from_file(str(REPO_ROOT / 'configs' / 'yamls' / 'demo.yaml'))
+    return _prepare_runtime_cfg(cfg)
 
 def load_video(video):
     cap = cv2.VideoCapture(video)
@@ -118,6 +146,8 @@ class MoViDAPI(object):
     
     @torch.no_grad()
     def __call__(self, video, output_dir='output/demo', calib=None, run_global=True, visualize=False):
+        video = _resolve_cli_path(video)
+        calib = _resolve_cli_path(calib)
         # load video information
         cap, fps, length, width, height = load_video(video)
         os.makedirs(output_dir, exist_ok=True)
@@ -141,7 +171,20 @@ class MoViDAPI(object):
 
 
 if __name__ == '__main__':
-    #from movid_api import MoViDAPI
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--video', type=str, required=True, help='Input video path')
+    parser.add_argument('--output_dir', type=str, default='output/demo', help='Output folder')
+    parser.add_argument('--calib', type=str, default=None, help='Camera calibration file path')
+    parser.add_argument('--estimate_local_only', action='store_true',
+                        help='Only estimate motion in camera coordinates')
+    parser.add_argument('--visualize', action='store_true', help='Visualize the output mesh')
+    args = parser.parse_args()
+
     movid_model = MoViDAPI()
-    input_video_path = 'examples/IMG_9732.mov'
-    results, tracking_results, slam_results = movid_model(input_video_path)
+    movid_model(
+        video=args.video,
+        output_dir=args.output_dir,
+        calib=args.calib,
+        run_global=not args.estimate_local_only,
+        visualize=args.visualize,
+    )

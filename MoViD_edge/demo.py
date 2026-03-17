@@ -11,7 +11,6 @@ import joblib
 import numpy as np
 from loguru import logger
 from progress.bar import Bar
-import psutil
 import time
 
 from configs.config import get_cfg_defaults

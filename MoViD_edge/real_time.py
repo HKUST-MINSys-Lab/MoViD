@@ -11,7 +11,6 @@ import joblib
 import numpy as np
 from loguru import logger
 from progress.bar import Bar
-import pyrealsense2 as rs
 
 from configs.config import get_cfg_defaults
 from lib.data.datasets.dataset_custom import convert_dpvo_to_cam_angvel
@@ -356,7 +355,13 @@ class OptimizedSequentialVideoProcessor:
 
     def _init_realsense(self):
         """Initialize the RealSense camera"""
-        import pyrealsense2 as rs
+        try:
+            import pyrealsense2 as rs
+        except ImportError as exc:
+            raise ImportError(
+                "RealSense support requires the optional 'pyrealsense2' package. "
+                "Install it to use '--video realsense'."
+            ) from exc
         self.is_realsense_camera = True
         self.pipeline = rs.pipeline()
         self.config = rs.config()

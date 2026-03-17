@@ -4,6 +4,7 @@ import os.path as osp
 from glob import glob
 import json
 from collections import defaultdict
+from pathlib import Path
 
 import cv2
 import torch
@@ -13,7 +14,7 @@ import pandas as pd
 from loguru import logger
 from progress.bar import Bar
 
-from configs.config import get_cfg_defaults
+from configs.config import get_cfg_defaults, resolve_cfg_paths
 from lib.data.datasets import CustomDataset
 from lib.utils.imutils import avg_preds
 from lib.utils.transforms import matrix_to_axis_angle
@@ -28,6 +29,75 @@ try:
 except: 
     logger.info('DPVO is not properly installed. Only estimate in local coordinates !')
     _run_global = False
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _resolve_cli_path(path_value):
+    if not path_value:
+        return path_value
+
+    path = Path(path_value)
+    if path.is_absolute():
+        return str(path)
+
+    for root in (Path.cwd(), REPO_ROOT):
+        candidate = (root / path).resolve()
+        if candidate.exists():
+            return str(candidate)
+
+    return path_value
+
+
+def _prepare_runtime_cfg(cfg):
+    cfg = resolve_cfg_paths(cfg)
+    if str(cfg.DEVICE).startswith('cuda') and not torch.cuda.is_available():
+        cfg = cfg.clone()
+        logger.warning('CUDA was requested but is not available. Falling back to CPU.')
+        cfg.DEVICE = 'cpu'
+    return cfg
+
+
+def _log_device_info(device):
+    if str(device).startswith('cuda') and torch.cuda.is_available():
+        device_index = 0
+        if ':' in str(device):
+            try:
+                device_index = int(str(device).split(':', 1)[1])
+            except ValueError:
+                device_index = 0
+        logger.info(f'GPU name -> {torch.cuda.get_device_name(device_index)}')
+        logger.info(f'GPU feat -> {torch.cuda.get_device_properties(device_index)}')
+    else:
+        logger.info(f'Running on device -> {device}')
+
+
+def _extract_state_dict(checkpoint):
+    if 'model_state_dict' in checkpoint:
+        state_dict = checkpoint['model_state_dict']
+    elif 'state_dict' in checkpoint:
+        state_dict = checkpoint['state_dict']
+    else:
+        state_dict = checkpoint.get('model', checkpoint)
+    return {k: v for k, v in state_dict.items() if not k.startswith('smpl.')}
+
+
+def _load_network_checkpoint(network, checkpoint_path, device, label):
+    checkpoint_path = _resolve_cli_path(checkpoint_path)
+    if not checkpoint_path or not osp.exists(checkpoint_path):
+        raise FileNotFoundError(f'{label} checkpoint not found: {checkpoint_path}')
+
+    logger.info(f'Loading {label} model from: {checkpoint_path}')
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    state_dict = _extract_state_dict(checkpoint)
+    missing_keys, unexpected_keys = network.load_state_dict(state_dict, strict=False)
+    if missing_keys:
+        logger.warning(f'{label} checkpoint missing {len(missing_keys)} keys')
+    if unexpected_keys:
+        logger.warning(f'{label} checkpoint has {len(unexpected_keys)} unexpected keys')
+    network.eval()
+    logger.info(f'Loaded {len(state_dict)} parameters for {label} model')
+    return checkpoint_path
 
 
 def align_by_pelvis(joints, pelvis_idxs=[2, 3]):
@@ -674,13 +744,17 @@ if __name__ == '__main__':
                         help='Run Temporal SMPLify for post processing')
 
     args = parser.parse_args()
+    args.folders = [_resolve_cli_path(folder) for folder in args.folders]
+    args.gt_checkpoint = _resolve_cli_path(args.gt_checkpoint)
+    args.pred_checkpoint = _resolve_cli_path(args.pred_checkpoint)
+    args.calib = _resolve_cli_path(args.calib)
 
     # Load config
     cfg = get_cfg_defaults()
-    cfg.merge_from_file('configs/yamls/demo.yaml')
+    cfg.merge_from_file(str(REPO_ROOT / 'configs' / 'yamls' / 'demo.yaml'))
+    cfg = _prepare_runtime_cfg(cfg)
     
-    logger.info(f'GPU name -> {torch.cuda.get_device_name()}')
-    logger.info(f'GPU feat -> {torch.cuda.get_device_properties("cuda")}')
+    _log_device_info(cfg.DEVICE)
     
     # Create base output directory
     os.makedirs(args.output_base, exist_ok=True)
@@ -694,22 +768,12 @@ if __name__ == '__main__':
     smpl = build_body_model(cfg.DEVICE, smpl_batch_size)
     
     # Load Ground Truth model
-    logger.info(f"Loading Ground Truth model from: {args.gt_checkpoint}")
     network_gt = build_network(cfg, smpl)
-    checkpoint_gt = torch.load(args.gt_checkpoint, map_location=cfg.DEVICE)
-    state_dict_gt = {k: v for k, v in checkpoint_gt['model'].items() if not k.startswith('smpl.')}
-    network_gt.load_state_dict(state_dict_gt, strict=False)
-    network_gt.eval()
-    logger.info(f"✓ Loaded {len(state_dict_gt)} parameters for GT model")
+    args.gt_checkpoint = _load_network_checkpoint(network_gt, args.gt_checkpoint, cfg.DEVICE, 'Ground Truth')
     
     # Load Prediction model
-    logger.info(f"Loading Prediction model from: {args.pred_checkpoint}")
     network_pred = build_network(cfg, smpl)
-    checkpoint_pred = torch.load(args.pred_checkpoint, map_location=cfg.DEVICE)
-    state_dict_pred = {k: v for k, v in checkpoint_pred['model'].items() if not k.startswith('smpl.')}
-    network_pred.load_state_dict(state_dict_pred, strict=False)
-    network_pred.eval()
-    logger.info(f"✓ Loaded {len(state_dict_pred)} parameters for Pred model")
+    args.pred_checkpoint = _load_network_checkpoint(network_pred, args.pred_checkpoint, cfg.DEVICE, 'Prediction')
     
     # ========= Process all folders ========= #
     summary_metrics = process_folders(

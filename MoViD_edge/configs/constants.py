@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
+from pathlib import Path
 import torch
 
 IMG_FEAT_DIM = {
@@ -10,7 +11,7 @@ IMG_FEAT_DIM = {
 }
 
 N_JOINTS = 17
-root = 'dataset'
+root = str(Path(__file__).resolve().parents[2] / 'dataset')
 class PATHS:
     # Raw data folders
     PARSED_DATA = f'{root}/parsed_data'

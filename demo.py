@@ -4,6 +4,7 @@ import os.path as osp
 from glob import glob
 from collections import defaultdict
 import sys
+from pathlib import Path
 
 import cv2
 import torch
@@ -39,7 +40,7 @@ if torch_lib_path:
         except:
             pass  # ctypes might not be available
 
-from configs.config import get_cfg_defaults
+from configs.config import get_cfg_defaults, resolve_cfg_paths
 from lib.data.datasets import CustomDataset
 from lib.utils.imutils import avg_preds
 from lib.utils.transforms import matrix_to_axis_angle
@@ -54,6 +55,47 @@ try:
 except: 
     logger.info('DPVO is not properly installed. Only estimate in local coordinates !')
     _run_global = False
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def _resolve_cli_path(path_value):
+    if not path_value:
+        return path_value
+
+    path = Path(path_value)
+    if path.is_absolute():
+        return str(path)
+
+    for root in (Path.cwd(), REPO_ROOT):
+        candidate = (root / path).resolve()
+        if candidate.exists():
+            return str(candidate)
+
+    return path_value
+
+
+def _prepare_runtime_cfg(cfg):
+    cfg = resolve_cfg_paths(cfg)
+    if str(cfg.DEVICE).startswith('cuda') and not torch.cuda.is_available():
+        cfg = cfg.clone()
+        logger.warning('CUDA was requested but is not available. Falling back to CPU.')
+        cfg.DEVICE = 'cpu'
+    return cfg
+
+
+def _log_device_info(device):
+    if str(device).startswith('cuda') and torch.cuda.is_available():
+        device_index = 0
+        if ':' in str(device):
+            try:
+                device_index = int(str(device).split(':', 1)[1])
+            except ValueError:
+                device_index = 0
+        logger.info(f'GPU name -> {torch.cuda.get_device_name(device_index)}')
+        logger.info(f'GPU feat -> {torch.cuda.get_device_properties(device_index)}')
+    else:
+        logger.info(f'Running on device -> {device}')
 
 def run(cfg,
         video,
@@ -819,17 +861,26 @@ if __name__ == '__main__':
                         help='Temporal window size for stream_inference (default: 10)')
 
     args = parser.parse_args()
+    args.video = _resolve_cli_path(args.video)
+    args.calib = _resolve_cli_path(args.calib)
+    args.checkpoint = _resolve_cli_path(args.checkpoint)
+    args.action_config = _resolve_cli_path(args.action_config)
+    args.action_checkpoint = _resolve_cli_path(args.action_checkpoint)
+    args.action_label_map = _resolve_cli_path(args.action_label_map)
+    args.motiongpt_path = _resolve_cli_path(args.motiongpt_path)
+    args.motiongpt_config = _resolve_cli_path(args.motiongpt_config)
+    args.motiongpt_checkpoint = _resolve_cli_path(args.motiongpt_checkpoint)
 
     cfg = get_cfg_defaults()
-    cfg.merge_from_file('configs/yamls/demo.yaml')
+    cfg.merge_from_file(str(REPO_ROOT / 'configs' / 'yamls' / 'demo.yaml'))
+    cfg = _prepare_runtime_cfg(cfg)
     
     # Override checkpoint if provided
     if args.checkpoint:
         cfg.TRAIN.CHECKPOINT = args.checkpoint
         logger.info(f"Using checkpoint: {args.checkpoint}")
     
-    logger.info(f'GPU name -> {torch.cuda.get_device_name()}')
-    logger.info(f'GPU feat -> {torch.cuda.get_device_properties("cuda")}')    
+    _log_device_info(cfg.DEVICE)
     
     # ========= Load MoViD ========= #
     smpl_batch_size = cfg.TRAIN.BATCH_SIZE * cfg.DATASET.SEQLEN

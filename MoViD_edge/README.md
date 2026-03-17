@@ -1,6 +1,6 @@
 # MoViD Edge
 
-`MoViD_edge` is the edge-side inference project for MoViD. The active maintained entrypoints are `real_time.py` and `demo.py`, and training / evaluation utilities have been retired out of the active tree into `.local/retired_*`.
+`MoViD_edge` is the edge-side inference project for MoViD. It lives inside the main MoViD repository, and the active maintained entrypoints are `real_time.py` and `demo.py`.
 
 ## Active Entry Points
 

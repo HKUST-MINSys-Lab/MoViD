@@ -17,14 +17,39 @@ from lib.data.dataloader import setup_dloaders
 from lib.utils.utils import create_logger, get_optimizer
 from lib.models import build_network, build_body_model
 
+
+def _prepare_runtime_cfg(cfg, logger=None):
+    if str(cfg.DEVICE).startswith('cuda') and not torch.cuda.is_available():
+        cfg = cfg.clone()
+        if logger is not None:
+            logger.warning('CUDA was requested but is not available. Falling back to CPU.')
+        cfg.DEVICE = 'cpu'
+    return cfg
+
+
+def _log_device_info(logger, device):
+    if str(device).startswith('cuda') and torch.cuda.is_available():
+        device_index = 0
+        if ':' in str(device):
+            try:
+                device_index = int(str(device).split(':', 1)[1])
+            except ValueError:
+                device_index = 0
+        logger.info(f'GPU name -> {torch.cuda.get_device_name(device_index)}')
+        logger.info(f'GPU feat -> {torch.cuda.get_device_properties(device_index)}')
+    else:
+        logger.info(f'Running on device -> {device}')
+
+
 def setup_seed(seed):
     """ Setup seed for reproducibility """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
 
 
 def main(cfg):
@@ -33,8 +58,8 @@ def main(cfg):
         setup_seed(cfg.SEED_VALUE)
 
     logger = create_logger(cfg.LOGDIR, phase='debug' if cfg.DEBUG else 'train')
-    logger.info(f'GPU name -> {torch.cuda.get_device_name()}')
-    logger.info(f'GPU feat -> {torch.cuda.get_device_properties("cuda")}')
+    cfg = _prepare_runtime_cfg(cfg, logger=logger)
+    _log_device_info(logger, cfg.DEVICE)
     logger.info(pprint.pformat(cfg))
     
     writer = SummaryWriter(log_dir=cfg.LOGDIR)

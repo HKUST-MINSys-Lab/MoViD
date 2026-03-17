@@ -2,7 +2,7 @@ import numpy as np
 import sys
 
 if len(sys.argv) < 2:
-    print("Usage: python tools/analysis/inspect_npz.py <path_to_npz_file>")
+    print("Usage: python archive/retired_tools/analysis/inspect_npz.py <path_to_npz_file>")
     sys.exit(1)
 
 npz_path = sys.argv[1]

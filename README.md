@@ -16,7 +16,7 @@ This repository has been cleaned up for GitHub so that source code, configs, doc
 - `lib/`: core models, data loaders, evaluation, and visualization
 - `configs/`: runtime and training configs
 - `scripts/`: organized helper scripts for setup, demo, evaluation, training, and data prep
-- `tools/`: action, data, eval, analysis, and research utilities
+- `tools/`: active action, data, and evaluation utilities
 - `docs/`: installation notes, dataset notes, and extra guides
 
 ## Repository Layout
@@ -26,6 +26,8 @@ This repository has been cleaned up for GitHub so that source code, configs, doc
 |-- configs/
 |-- docs/
 |   |-- guides/
+|-- archive/
+|   `-- retired_tools/
 |-- lib/
 |-- models/
 |   `-- action_recognition/
@@ -37,10 +39,8 @@ This repository has been cleaned up for GitHub so that source code, configs, doc
 |   `-- train/
 |-- tools/
 |   |-- action/
-|   |-- analysis/
 |   |-- data/
-|   |-- eval/
-|   `-- research/
+|   `-- eval/
 |-- third-party/
 |-- batch_eval.py
 |-- demo.py
@@ -106,6 +106,8 @@ The `.gitignore` now excludes:
 - local backup scripts under `.local/`
 
 If you already have local weights, place them under `checkpoints/` or use environment variables such as `MOVID_CHECKPOINT` and `ACTION_CHECKPOINT` when running the helper scripts.
+
+Some non-core analysis, research, and one-off data-conversion helpers have been moved into `archive/retired_tools/` so the active tree stays focused on training and full inference workflows while the older scripts remain available in version control.
 
 ## Third-Party Components
 

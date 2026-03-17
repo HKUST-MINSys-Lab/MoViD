@@ -15,6 +15,6 @@ docker pull <your-movid-edge-image>
 
 2. Run the code with docker environment:
 ```bash
-cd /path/to/MoViD_edge
-docker run -v .:/code/ --rm <your-movid-edge-image> python demo.py --video <input-video.mp4>
+cd /path/to/MoViD
+docker run -v .:/code/ --rm <your-movid-edge-image> python MoViD_edge/demo.py --video <input-video.mp4>
 ```

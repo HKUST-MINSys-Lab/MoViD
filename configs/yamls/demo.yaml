@@ -8,6 +8,6 @@ FLIP_EVAL: True
 
 TRAIN:
   STAGE: 'stage2'
-  CHECKPOINT: 'checkpoints/movid_vit_w_3dpw.pth.tar'
+  CHECKPOINT: 'checkpoints/movid_stage1.tar.pth'
 MODEL:
   BACKBONE: 'vit'

@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 from yacs.config import CfgNode as CN
 
 # Configuration variable
@@ -58,11 +59,39 @@ cfg.LOSS.CAMERA_LOSS_SKIP_EPOCH = 5
 cfg.LOSS.DIFFUSION_LOSS_WEIGHT = 5.
 
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _resolve_path(path_value, search_roots):
+    if not path_value:
+        return path_value
+
+    path = Path(path_value)
+    if path.is_absolute():
+        return str(path)
+
+    for root in search_roots:
+        candidate = (root / path).resolve()
+        if candidate.exists():
+            return str(candidate)
+
+    return str((search_roots[0] / path).resolve())
+
+
 def get_cfg_defaults():
     """Get a yacs CfgNode object with default values for my_project."""
     # Return a clone so that the defaults will not be altered
     # This is for the "local variable" use pattern
     return cfg.clone()
+
+
+def resolve_cfg_paths(cfg):
+    cfg = cfg.clone()
+    if cfg.MODEL_CONFIG:
+        cfg.MODEL_CONFIG = _resolve_path(cfg.MODEL_CONFIG, [REPO_ROOT])
+    if cfg.TRAIN.CHECKPOINT:
+        cfg.TRAIN.CHECKPOINT = _resolve_path(cfg.TRAIN.CHECKPOINT, [REPO_ROOT])
+    return cfg
 
 
 def get_cfg(args, test):
@@ -72,14 +101,15 @@ def get_cfg(args, test):
     import os
     
     cfg = get_cfg_defaults()
-    if os.path.exists(args.cfg):
-        cfg.merge_from_file(args.cfg)
+    cfg_path = _resolve_path(args.cfg, [REPO_ROOT])
+    if os.path.exists(cfg_path):
+        cfg.merge_from_file(cfg_path)
     
     cfg.merge_from_list(args.opts)
     if test:
         cfg.merge_from_list(['EVAL', True])
 
-    return cfg.clone()
+    return resolve_cfg_paths(cfg)
 
 
 def bool_arg(value):
@@ -91,7 +121,7 @@ def bool_arg(value):
 
 def parse_args(test=False):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--cfg', type=str, default='./configs/debug.yaml', help='cfg file path')
+    parser.add_argument('-c', '--cfg', type=str, default='configs/yamls/stage2.yaml', help='cfg file path')
     parser.add_argument(
         "--eval-set", type=str, default='3dpw', help="Evaluation dataset")
     parser.add_argument(
@@ -110,7 +140,7 @@ def parse_args(test=False):
     
     args = parser.parse_args()
     print(args, end='\n\n')
-    cfg_file = args.cfg
+    cfg_file = _resolve_path(args.cfg, [REPO_ROOT])
     cfg = get_cfg(args, test)
 
     return cfg, cfg_file, args
