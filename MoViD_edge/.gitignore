@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local-only workspace
+/.local/
+/third-party/
+/output/
+/outputs/
+/results/
+/runs/
+/checkpoints/
+/engines/
+/dataset/
+/datasets/
+/data/
+
+# Edge artifacts
+*.log
+*.out
+*.err
+*.tmp
+*.png
+*.jpg
+*.mp4
+*.onnx
+*.engine
+*.pth
+*.pt
+*.ckpt
+*.npz
+*.npy
+*.csv
+*.whl

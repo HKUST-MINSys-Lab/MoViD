@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local-only workspace
+/.local/
+/ASD/
+/final_version/
+/dataset/
+/data/
+/checkpoints/
+/logs/
+/output/
+/work_dirs/
+
+# Downloaded / generated assets
+/examples/
+/models/action_recognition/stgcn++_ntu60_xsub_3d_labels.txt
+/results_summary.txt
+tmp_*.log
+download_*.log
+run_asd_all_videos.log
+cookies.txt
+headers.txt
+login_*.html
+
+# Large binary artifacts
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.pth
+*.pt
+*.ckpt
+*.pkl
+*.npz
+
+# Notebook / temp
+.ipynb_checkpoints/

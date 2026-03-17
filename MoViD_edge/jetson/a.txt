@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "real_time.py", line 760, in <module>
+    run(cfg,
+  File "real_time.py", line 690, in run
+    results = processor.run()
+  File "real_time.py", line 510, in run
+    output = self.stream_inference.process_frame(
+  File "/home/dlq/WHAM/optimized_streaming.py", line 142, in process_frame
+    window_size = self._predict_window_size()
+  File "/home/dlq/WHAM/optimized_streaming.py", line 109, in _predict_window_size
+    self.stats['window_sizes'].append(self.default_window)
+KeyError: 'window_sizes'
+Exception ignored in: <function FeatureExtractor.__del__ at 0xfffee3a1daf0>
+Traceback (most recent call last):
+  File "/home/dlq/WHAM/lib/models/preproc/extractor.py", line 100, in __del__
+    torch.cuda.empty_cache()
+  File "/home/dlq/.local/lib/python3.8/site-packages/torch/cuda/memory.py", line 133, in empty_cache
+    torch._C._cuda_emptyCache()
+RuntimeError: CUDA error: invalid device context
+CUDA kernel errors might be asynchronously reported at some other API call,so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+
