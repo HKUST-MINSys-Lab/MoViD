@@ -2,6 +2,8 @@
 
 `MoViD_edge` is the edge-side inference project for MoViD. It lives inside the main MoViD repository, and the active maintained entrypoints are `real_time.py` and `demo.py`.
 
+For the full camera-ready release flow, including installation, root training, evaluation, and all inference modes, start from [docs/CAMERA_READY.md](../docs/CAMERA_READY.md).
+
 ## Active Entry Points
 
 - `real_time.py`: recommended edge runtime; supports camera/video input, action recognition, and flip evaluation
@@ -32,6 +34,12 @@ python3 tools/model/download_action_model.py stgcn_ntu60_xsub_3d
 - offline recorded-video inference with `demo.py`
 - real-time streaming inference with `real_time.py`
 - flip-eval enhanced streaming inference with `real_time.py --flip_eval`
+
+Recommended order:
+
+1. Run `demo.py` on a recorded video first
+2. Run `real_time.py` on a recorded video through the streaming pipeline
+3. Switch `real_time.py --video realsense` for live deployment
 
 Recorded video with `demo.py`:
 

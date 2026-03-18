@@ -13,6 +13,7 @@ __pycache__/
 
 # Local-only workspace
 /.local/
+/archive/
 /ASD/
 /final_version/
 /dataset/
