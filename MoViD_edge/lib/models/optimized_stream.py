@@ -201,9 +201,9 @@ class StreamInference(nn.Module):
             )
 
         # ===== Step 6: CLIP feature fusion (after the trajectory decoder) =====
-        # if img_features is not None:
-        #     clip_feat = self.network.clip_proj(img_features[:, -1:])
-        #     motion_context = self.network.clip_gated_fusion(motion_context, clip_feat)
+        if img_features is not None:
+            clip_feat = self.network.clip_proj(img_features[:, -1:])
+            motion_context = self.network.clip_gated_fusion(motion_context, clip_feat)
 
         # ===== Step 7: View encoding =====
         view_feat = self.network.view_encoder(pred_kp3d)
@@ -382,5 +382,4 @@ class StreamInference(nn.Module):
         print(f"Frames Processed: {self.state_manager.frame_count}")
         if self.state_manager.frame_count > 0:
             print(f"Avg Concat/Frame: {self.stats['concat_ops']/self.state_manager.frame_count:.2f}")
-
 

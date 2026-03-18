@@ -19,7 +19,6 @@ from lib.utils.kp_utils import root_centering
 import math
 
 import torch.nn.functional as F
-import random
 
 def plot_similarity_heatmap(motion_feat, view_feat, title='Similarity Heatmap', save_path=None, n_samples=30, random_seed=42):
     # Subsample for visualization
@@ -180,6 +179,8 @@ class Network(nn.Module):
             # Module 3. Feature Integrator
             self.integrator = Integrator(in_channel=d_feat + d_context, 
                                         out_channel=d_context)
+            # Keep the module for checkpoint compatibility, but disable it in all runtime paths.
+            self.use_integrator = False
 
             # Module 4. Motion Decoder
         # Module 5. Motion Decoder - Predict body pose from motion features (excluding the root)
@@ -408,7 +409,55 @@ class Network(nn.Module):
             'view_feat_mse': mse.item(),
             'view_feat_explained_variance': explained_variance_score.item()
         }
-    
+
+    def _decode_prediction_branch(self, pred_kp3d, motion_context, view_feat, init_smpl,
+                                  init_root, cam_angvel, img_features=None,
+                                  use_img_features=False):
+        motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
+        old_motion_context = motion_context_with_kp3d.detach()
+
+        if self.use_integrator and use_img_features and img_features is not None and self.integrator is not None:
+            motion_context_with_kp3d = self.integrator(motion_context_with_kp3d, img_features)
+
+        pred_root, pred_vel = self.trajectory_decoder(motion_context_with_kp3d, init_root, cam_angvel)
+
+        fused_motion_context = motion_context
+        if use_img_features and img_features is not None:
+            clip_feat = self.clip_proj(img_features)
+            fused_motion_context = self.clip_gated_fusion(fused_motion_context, clip_feat)
+
+        fused_motion_context = self.gated_fusion(fused_motion_context, view_feat)
+
+        view_context_with_kp3d = torch.cat((fused_motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
+        pred_global_orient, pred_cam = self.view_decoder(view_context_with_kp3d, init_smpl)
+
+        projected_motion_context = self.dynamic_projection(fused_motion_context, view_feat)
+        ortho_loss = self.orthogonal_loss(projected_motion_context, view_feat)
+
+        motion_context_with_kp3d = torch.cat(
+            (projected_motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1
+        )
+        pred_body_pose, pred_shape, pred_contact = self.motion_decoder(
+            motion_context_with_kp3d,
+            init_smpl
+        )
+
+        return {
+            'old_motion_context': old_motion_context,
+            'pred_root': pred_root,
+            'pred_vel': pred_vel,
+            'pred_global_orient': pred_global_orient,
+            'pred_cam': pred_cam,
+            'motion_context': projected_motion_context,
+            'motion_context_with_kp3d': motion_context_with_kp3d,
+            'pred_body_pose': pred_body_pose,
+            'pred_shape': pred_shape,
+            'pred_contact': pred_contact,
+            'pred_pose': torch.cat([pred_global_orient, pred_body_pose], dim=-1),
+            'ortho_loss': ortho_loss,
+            'pred_kp3d': pred_kp3d,
+        }
+
     def forward(self, x, gt, inits, img_features=None, atten=True, mask=None, init_root=None, cam_angvel=None,
                 cam_intrinsics=None, bbox=None, res=None, return_y_up=False, refine_traj=True, **kwargs):
 
@@ -417,61 +466,28 @@ class Network(nn.Module):
 
         # Stage 1. Encode motion - used for body pose prediction
         pred_kp3d, motion_context = self.motion_encoder(x, init_kp)
-        motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
-        self.old_motion_context = motion_context_with_kp3d.detach()
-        if img_features is not None and self.integrator is not None and random.random() > 0.5:
-            motion_context_with_kp3d = self.integrator(motion_context_with_kp3d, img_features)
-        # Stage 2. Decode global trajectory
-        pred_root, pred_vel = self.trajectory_decoder(motion_context_with_kp3d, init_root, cam_angvel)
-        # Stage 5: decode global_orient and cam from view_context
-
-        if img_features is not None and self.integrator is not None and random.random() > 0.5:
-            clip_feat = self.clip_proj(img_features)                     # project to the d_embed dimension
-            motion_context = self.clip_gated_fusion(motion_context, clip_feat)  # gate-fuse
-        # Use a minimal encoder that extracts only basic hip and shoulder geometry
         view_feat = self.view_encoder(pred_kp3d)
-        
-        # view_feat: [B, T, d_embed] - pure view features based on hip and shoulder vectors
-        motion_context = self.gated_fusion(motion_context, view_feat)
-        
-        motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
-        pred_global_orient, pred_cam = self.view_decoder(
-            motion_context_with_kp3d,  # use view features
-            init_smpl
+        use_img_features = img_features is not None
+
+        main_branch = self._decode_prediction_branch(
+            pred_kp3d, motion_context, view_feat, init_smpl, init_root, cam_angvel,
+            img_features=img_features, use_img_features=use_img_features
         )
-        #pred_kp3d_front = transform_kp3d_to_front_view(pred_kp3d, pred_global_orient)
-    
-        motion_context = self.dynamic_projection(motion_context, view_feat)
-        # Compute the orthogonality loss to encourage decoupled feature spaces
-        ortho_loss = self.orthogonal_loss(motion_context, view_feat)
 
-
-        # Save for the refiner
-        motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
-        self.motion_context_with_kp3d = motion_context_with_kp3d
-        self.motion_context = motion_context
+        self.old_motion_context = main_branch['old_motion_context']
+        self.motion_context_with_kp3d = main_branch['motion_context_with_kp3d']
+        self.motion_context = main_branch['motion_context']
         self.view_feat = view_feat
 
-        # Stage 5. Decode body pose from MOTION context only
-        # motion_decoder now predicts only body pose (excluding the root)
-        pred_body_pose, pred_shape, pred_contact = self.motion_decoder(
-            motion_context_with_kp3d,  # use motion features
-            init_smpl
-        )
-        
-        # Compose the full pose: [B, T, 144] = [6 + 138]
-        pred_pose = torch.cat([pred_global_orient, pred_body_pose], dim=-1)
-        # --------- #
-
         # --------- Register predictions --------- #
-        self.pred_kp3d = pred_kp3d
-        self.pred_root = pred_root             
-        self.global_orient = pred_global_orient 
-        self.pred_vel = pred_vel
-        self.pred_pose = pred_pose
-        self.pred_shape = pred_shape
-        self.pred_cam = pred_cam
-        self.pred_contact = pred_contact
+        self.pred_kp3d = main_branch['pred_kp3d']
+        self.pred_root = main_branch['pred_root']
+        self.global_orient = main_branch['pred_global_orient']
+        self.pred_vel = main_branch['pred_vel']
+        self.pred_pose = main_branch['pred_pose']
+        self.pred_shape = main_branch['pred_shape']
+        self.pred_cam = main_branch['pred_cam']
+        self.pred_contact = main_branch['pred_contact']
         # --------- #
 
         # --------- Build SMPL --------- #
@@ -494,7 +510,7 @@ class Network(nn.Module):
             
             # Original pose-motion contrastive learning
             gt_pose_filtered = gt_pose_flat[valid_mask]
-            motion_context_reshaped = motion_context.reshape(b, f, -1)
+            motion_context_reshaped = self.motion_context.reshape(b, f, -1)
             motion_context_filtered = motion_context_reshaped[valid_mask]
             
             if gt_pose_filtered.shape[0] > 0:
@@ -511,7 +527,7 @@ class Network(nn.Module):
             else:
                 contrastive_loss = torch.tensor(0.0, device=output['pose'].device)
 
-            output['ortho_loss'] = ortho_loss
+            output['ortho_loss'] = main_branch['ortho_loss']
             output['contrastive_loss'] = contrastive_loss
         
         return output

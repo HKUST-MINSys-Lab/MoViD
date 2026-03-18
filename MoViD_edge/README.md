@@ -27,6 +27,12 @@ python3 tools/model/download_action_model.py stgcn_ntu60_xsub_3d
 
 ### 3. Run edge inference
 
+`MoViD_edge` keeps the edge-side inference entrypoints only. The active modes are:
+
+- offline recorded-video inference with `demo.py`
+- real-time streaming inference with `real_time.py`
+- flip-eval enhanced streaming inference with `real_time.py --flip_eval`
+
 Recorded video with `demo.py`:
 
 ```bash
@@ -37,6 +43,18 @@ RealSense / edge camera with `real_time.py`:
 
 ```bash
 python3 real_time.py --video realsense --visualize --max_frames 1000
+```
+
+Recorded video through the real-time streaming pipeline:
+
+```bash
+python3 real_time.py --video <input-video.mp4> --visualize --max_frames 1000
+```
+
+Streaming inference with flip evaluation:
+
+```bash
+python3 real_time.py --video realsense --visualize --flip_eval --flip_select all --max_frames 1000
 ```
 
 ## Repository Layout

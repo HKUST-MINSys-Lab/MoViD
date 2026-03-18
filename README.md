@@ -71,20 +71,91 @@ python tools/action/download_stgcn_model.py
 bash scripts/setup/fetch_demo_data.sh
 ```
 
-### 3. Run a demo
+### 3. Train the model
+
+Stage-2 training:
+
+```bash
+python train.py --cfg configs/yamls/stage2.yaml
+```
+
+If you are running in a constrained environment where multi-worker dataloaders are blocked, use:
+
+```bash
+python train.py --cfg configs/yamls/stage2.yaml NUM_WORKERS 0
+```
+
+### 4. Evaluate a checkpoint
+
+Use the helper script:
+
+```bash
+bash scripts/eval/run_eval.sh
+```
+
+Or run the batch evaluator directly:
+
+```bash
+python batch_eval.py \
+  --folders <sequence_dir_1> <sequence_dir_2> \
+  --output_base output/batch_eval \
+  --gt_checkpoint <ground-truth-checkpoint> \
+  --pred_checkpoint <prediction-checkpoint>
+```
+
+### 5. Run inference
+
+MoViD supports several inference modes from the main repository and the edge subproject.
+
+Offline full-video inference:
+
+```bash
+python demo.py --video <input-video.mp4> --output_pth output/demo --visualize
+```
+
+Stream inference with `network.stream_inference()`:
+
+```bash
+python demo.py --video <input-video.mp4> --mode stream --stream_window_size 10 --output_pth output/stream --visualize
+```
+
+Demo with action recognition:
 
 ```bash
 bash scripts/demo/run_demo_with_har.sh <input-video.mp4> output/demo_har
 ```
 
-If action-recognition assets are missing, the script will fall back to base reconstruction-only inference.
+Simple API-style CLI wrapper:
+
+```bash
+python movid_api.py --video <input-video.mp4> --output_dir output/api_demo --visualize
+```
+
+Edge offline inference:
+
+```bash
+python MoViD_edge/demo.py --video <input-video.mp4> --output_pth output/edge_demo --visualize
+```
+
+Edge real-time / streaming inference:
+
+```bash
+python MoViD_edge/real_time.py --video realsense --output_pth output/edge_rt --visualize --max_frames 1000
+```
+
+If action-recognition assets are missing, the HAR helper script will fall back to base reconstruction-only inference.
 
 ## Common Workflows
 
+- Stage-2 training: [train.py](train.py) or [scripts/train/run_stage2_train.sh](scripts/train/run_stage2_train.sh)
+- Offline full-video inference: [demo.py](demo.py)
+- Stream inference: [demo.py](demo.py)
+- API / wrapper inference: [movid_api.py](movid_api.py)
+- Batch evaluation: [batch_eval.py](batch_eval.py) or [scripts/eval/run_eval.sh](scripts/eval/run_eval.sh)
 - Demo with action recognition: [scripts/demo/run_demo_with_har.sh](scripts/demo/run_demo_with_har.sh)
 - Batch demo over a folder: [scripts/demo/run_demo.sh](scripts/demo/run_demo.sh)
-- Stage-2 training: [scripts/train/run_stage2_train.sh](scripts/train/run_stage2_train.sh)
-- Evaluation: [scripts/eval/run_eval.sh](scripts/eval/run_eval.sh)
+- Edge offline inference: [MoViD_edge/demo.py](MoViD_edge/demo.py)
+- Edge real-time inference: [MoViD_edge/real_time.py](MoViD_edge/real_time.py)
 - HuMMan preprocessing loop: [scripts/data/run_all_views.sh](scripts/data/run_all_views.sh)
 
 ## Extra Guides
