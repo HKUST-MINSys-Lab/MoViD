@@ -1,6 +1,12 @@
-# Camera-Ready Code Release
+# MoViD Camera-Ready Guide
 
-This document describes what is included in the public MoViD code release and how to run the code step by step, from environment setup to training, evaluation, and inference.
+**Paper:** *MoViD: View-Invariant 3D Human Pose Estimation via Motion-View Disentanglement*
+
+[Paper DOI](https://doi.org/10.1145/3774906.3802786) | [Paper PDF](https://dl.acm.org/doi/pdf/10.1145/3774906.3802786) | [Demo Video](https://youtu.be/L4Bx_LvPXB8) | [Repository README](../README.md)
+
+MoViD is designed for robust 3D human pose estimation across diverse viewpoints. It explicitly estimates and disentangles viewpoint information from motion features, improves cross-view robustness with orthogonal feature projection and physics-grounded alignment, and supports frame-by-frame inference for real-time execution on edge hardware such as NVIDIA Jetson devices.
+
+This document expands the project-style overview in [README.md](../README.md) and describes what is included in the public MoViD code release and how to run the code step by step, from environment setup to training, evaluation, and inference.
 
 ## 1. What Is Included
 
