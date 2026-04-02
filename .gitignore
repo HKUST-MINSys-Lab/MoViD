@@ -51,4 +51,3 @@ login_*.html
 
 # Notebook / temp
 .ipynb_checkpoints/
-/archive/*
