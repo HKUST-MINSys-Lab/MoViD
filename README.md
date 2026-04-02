@@ -14,7 +14,7 @@ This repository is organized as the camera-ready code release. It keeps the main
 
 ## System Overview
 
-![MoViD system overview](docs/assets/movid_figure-000.png)
+![MoViD system overview](docs/assets/overview.png)
 
 MoViD introduces four main components for view-invariant and edge-ready 3D pose estimation:
 
