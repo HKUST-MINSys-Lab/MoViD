@@ -152,7 +152,7 @@ class StreamInference(nn.Module):
         5. gated_fusion(motion_context, view_feat) -> motion_context
         6. cat(motion_context, kp3d) -> view_decoder -> pred_global_orient, pred_cam
         7. dynamic_projection(motion_context, view_feat) -> motion_context
-        8. cat(motion_context, kp3d) -> motion_decoder -> pred_body_pose, pred_shape, pred_contact
+        8. motion_decoder(projected motion_context) -> pred_body_pose, pred_shape, pred_contact
         9. cat(pred_global_orient, pred_body_pose) -> pred_pose
         """
 
@@ -232,28 +232,22 @@ class StreamInference(nn.Module):
         # ===== Step 12: Dynamic projection =====
         motion_context_projected = self.network.dynamic_projection(motion_context_fused, view_feat)
 
-        # ===== Step 13: cat(motion_context_projected, kp3d) for motion_decoder =====
-        motion_with_kp_for_pose = torch.cat([
-            motion_context_projected,
-            pred_kp3d.reshape(b, 1, -1)
-        ], dim=-1)
-
-        # ===== Step 14: Update the buffer =====
+        # ===== Step 13: Update the buffer =====
         self.state_manager.update_buffers(motion_context_projected, pred_kp3d)
         self.stats['buffer_ops'] += 1
 
-        # ===== Step 15: Motion Decoder - pred_body_pose, pred_shape, pred_contact =====
+        # ===== Step 14: Motion Decoder - pred_body_pose, pred_shape, pred_contact =====
         pred_body_pose, pred_shape, pred_contact, hidden_states['motion_decoder'] = \
             self.network.motion_decoder.forward_step(
-                motion_with_kp_for_pose,
+                motion_context_projected,
                 init_smpl_view,
                 hidden_states['motion_decoder']
             )
 
-        # ===== Step 16: Combine pose = [global_orient(6) + body_pose(138)] =====
+        # ===== Step 15: Combine pose = [global_orient(6) + body_pose(138)] =====
         pred_pose = torch.cat([pred_global_orient, pred_body_pose], dim=-1)
 
-        # ===== Step 17: SMPL forward =====
+        # ===== Step 16: SMPL forward =====
         output = self._forward_smpl_optimized(
             pred_pose, pred_shape, pred_cam,
             pred_contact, pred_root, pred_vel,
@@ -382,4 +376,3 @@ class StreamInference(nn.Module):
         print(f"Frames Processed: {self.state_manager.frame_count}")
         if self.state_manager.frame_count > 0:
             print(f"Avg Concat/Frame: {self.stats['concat_ops']/self.state_manager.frame_count:.2f}")
-

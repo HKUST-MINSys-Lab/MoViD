@@ -185,7 +185,7 @@ class Network(nn.Module):
             # Module 4. Motion Decoder
         # Module 5. Motion Decoder - Predict body pose from motion features (excluding the root)
         self.motion_decoder = MotionDecoder(
-            d_embed=d_embed + n_joints * 3,
+            d_embed=d_embed,
             rnn_type=rnn_type,
             n_layers=n_layers
         )
@@ -413,13 +413,13 @@ class Network(nn.Module):
     def _decode_prediction_branch(self, pred_kp3d, motion_context, view_feat, init_smpl,
                                   init_root, cam_angvel, img_features=None,
                                   use_img_features=False):
-        motion_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
-        old_motion_context = motion_context_with_kp3d.detach()
+        trajectory_context_with_kp3d = torch.cat((motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1)
+        old_motion_context = trajectory_context_with_kp3d.detach()
 
         if self.use_integrator and use_img_features and img_features is not None and self.integrator is not None:
-            motion_context_with_kp3d = self.integrator(motion_context_with_kp3d, img_features)
+            trajectory_context_with_kp3d = self.integrator(trajectory_context_with_kp3d, img_features)
 
-        pred_root, pred_vel = self.trajectory_decoder(motion_context_with_kp3d, init_root, cam_angvel)
+        pred_root, pred_vel = self.trajectory_decoder(trajectory_context_with_kp3d, init_root, cam_angvel)
 
         fused_motion_context = motion_context
         if use_img_features and img_features is not None:
@@ -434,11 +434,11 @@ class Network(nn.Module):
         projected_motion_context = self.dynamic_projection(fused_motion_context, view_feat)
         ortho_loss = self.orthogonal_loss(projected_motion_context, view_feat)
 
-        motion_context_with_kp3d = torch.cat(
+        projected_context_with_kp3d = torch.cat(
             (projected_motion_context, pred_kp3d.reshape(self.b, self.f, -1)), dim=-1
         )
         pred_body_pose, pred_shape, pred_contact = self.motion_decoder(
-            motion_context_with_kp3d,
+            projected_motion_context,
             init_smpl
         )
 
@@ -449,7 +449,7 @@ class Network(nn.Module):
             'pred_global_orient': pred_global_orient,
             'pred_cam': pred_cam,
             'motion_context': projected_motion_context,
-            'motion_context_with_kp3d': motion_context_with_kp3d,
+            'motion_context_with_kp3d': projected_context_with_kp3d,
             'pred_body_pose': pred_body_pose,
             'pred_shape': pred_shape,
             'pred_contact': pred_contact,
@@ -689,22 +689,15 @@ class Network(nn.Module):
         # Stage 5. Apply dynamic projection to decouple motion from view
         motion_context_decoupled = self.dynamic_projection(motion_context_fused, view_feat)
 
-        # Prepare motion_context_with_kp3d for motion decoder (after dynamic projection)
-        motion_context_with_kp3d_for_motion = torch.cat(
+        # Keep a context+kp3d history for trajectory/view/refiner paths. The
+        # body-pose decoder must receive only the projected motion feature.
+        motion_context_with_kp3d_for_history = torch.cat(
             (motion_context_decoupled, pred_kp3d_current.reshape(self.b, 1, -1)), dim=-1
         )
 
-        # Prepare full sequences for motion decoder
-        if prev_context is not None and prev_kp3d is not None and window_size > 1:
-            full_motion_context_with_kp3d_for_motion = torch.cat([
-                recent_context, motion_context_with_kp3d_for_motion
-            ], dim=1)
-        else:
-            full_motion_context_with_kp3d_for_motion = motion_context_with_kp3d_for_motion
-
         # Stage 6. Motion Decoder - predict body pose only (not including global_orient)
         pred_body_pose, pred_shape, pred_contact, hidden_states['motion_decoder'] = self.motion_decoder.forward_step(
-            full_motion_context_with_kp3d_for_motion, prev_smpl, hidden_states['motion_decoder']
+            motion_context_decoupled, prev_smpl, hidden_states['motion_decoder']
         )
 
         # Combine global_orient and body_pose to form complete pose
@@ -713,11 +706,11 @@ class Network(nn.Module):
         # Update full motion context for return (use the decoupled version)
         if prev_context is not None and prev_kp3d is not None and window_size > 1:
             updated_full_motion_context = torch.cat([
-                recent_context, motion_context_with_kp3d_for_motion
+                recent_context, motion_context_with_kp3d_for_history
             ], dim=1)
             full_kp3d = torch.cat((recent_kp3d, pred_kp3d_current), dim=1)
         else:
-            updated_full_motion_context = motion_context_with_kp3d_for_motion
+            updated_full_motion_context = motion_context_with_kp3d_for_history
             full_kp3d = pred_kp3d_current
 
         # Register predictions

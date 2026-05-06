@@ -904,15 +904,28 @@ if __name__ == '__main__':
             # Try direct loading, but filter SMPL if present
             state_dict = {k: v for k, v in checkpoint.items() if not k.startswith('smpl.')}
         
-        # Load with strict=False to allow partial loading
-        missing_keys, unexpected_keys = network.load_state_dict(state_dict, strict=False)
+        model_state_dict = network.state_dict()
+        compatible_state_dict = {}
+        skipped_shape_keys = []
+        for k, v in state_dict.items():
+            if k not in model_state_dict:
+                continue
+            if v.shape == model_state_dict[k].shape:
+                compatible_state_dict[k] = v
+            else:
+                skipped_shape_keys.append(k)
+
+        missing_keys, unexpected_keys = network.load_state_dict(compatible_state_dict, strict=False)
+        if skipped_shape_keys:
+            logger.warning(f"Skipped {len(skipped_shape_keys)} checkpoint keys with incompatible shapes")
+            logger.debug(f"First few shape-mismatched keys: {skipped_shape_keys[:5]}")
         if missing_keys:
             logger.warning(f"Missing keys in checkpoint: {len(missing_keys)} keys")
             logger.debug(f"First few missing keys: {missing_keys[:5]}")
         if unexpected_keys:
             logger.warning(f"Unexpected keys in checkpoint: {len(unexpected_keys)} keys")
             logger.debug(f"First few unexpected keys: {unexpected_keys[:5]}")
-        logger.info(f"Checkpoint loaded successfully ({len(state_dict)} parameters)")
+        logger.info(f"Checkpoint loaded successfully ({len(compatible_state_dict)} compatible parameters)")
     
     network.eval()
     

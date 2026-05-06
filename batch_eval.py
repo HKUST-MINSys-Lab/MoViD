@@ -90,13 +90,27 @@ def _load_network_checkpoint(network, checkpoint_path, device, label):
     logger.info(f'Loading {label} model from: {checkpoint_path}')
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     state_dict = _extract_state_dict(checkpoint)
-    missing_keys, unexpected_keys = network.load_state_dict(state_dict, strict=False)
+    model_state_dict = network.state_dict()
+    compatible_state_dict = {}
+    skipped_shape_keys = []
+    for k, v in state_dict.items():
+        if k not in model_state_dict:
+            continue
+        if v.shape == model_state_dict[k].shape:
+            compatible_state_dict[k] = v
+        else:
+            skipped_shape_keys.append(k)
+
+    missing_keys, unexpected_keys = network.load_state_dict(compatible_state_dict, strict=False)
+    if skipped_shape_keys:
+        logger.warning(f'{label} checkpoint skipped {len(skipped_shape_keys)} shape-mismatched keys')
+        logger.debug(f'{label} first shape-mismatched keys: {skipped_shape_keys[:5]}')
     if missing_keys:
         logger.warning(f'{label} checkpoint missing {len(missing_keys)} keys')
     if unexpected_keys:
         logger.warning(f'{label} checkpoint has {len(unexpected_keys)} unexpected keys')
     network.eval()
-    logger.info(f'Loaded {len(state_dict)} parameters for {label} model')
+    logger.info(f'Loaded {len(compatible_state_dict)} compatible parameters for {label} model')
     return checkpoint_path
 
 
