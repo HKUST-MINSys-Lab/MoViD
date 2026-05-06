@@ -34,6 +34,29 @@ except:
     _run_global = False
 
 
+def load_compatible_state_dict(network, state_dict, label):
+    model_state_dict = network.state_dict()
+    compatible_state_dict = {}
+    skipped_shape_keys = []
+    for k, v in state_dict.items():
+        if k not in model_state_dict:
+            continue
+        if v.shape == model_state_dict[k].shape:
+            compatible_state_dict[k] = v
+        else:
+            skipped_shape_keys.append(k)
+
+    missing_keys, unexpected_keys = network.load_state_dict(compatible_state_dict, strict=False)
+    if skipped_shape_keys:
+        logger.warning(f"{label} checkpoint skipped {len(skipped_shape_keys)} shape-mismatched keys")
+        logger.debug(f"{label} first shape-mismatched keys: {skipped_shape_keys[:5]}")
+    if missing_keys:
+        logger.warning(f"{label} checkpoint missing {len(missing_keys)} keys")
+    if unexpected_keys:
+        logger.warning(f"{label} checkpoint has {len(unexpected_keys)} unexpected keys")
+    return compatible_state_dict
+
+
 def align_by_pelvis(joints, pelvis_idxs=[2, 3]):
     """
     Align joints by pelvis (root alignment)
@@ -505,9 +528,9 @@ if __name__ == '__main__':
     
     # Filter out SMPL parameters (they don't need to be loaded as SMPL is not trainable)
     state_dict_gt = {k: v for k, v in checkpoint_gt['model'].items() if not k.startswith('smpl.')}
-    network_gt.load_state_dict(state_dict_gt, strict=False)
+    state_dict_gt = load_compatible_state_dict(network_gt, state_dict_gt, "GT")
     network_gt.eval()
-    logger.info(f"Loaded {len(state_dict_gt)} parameters for GT model")
+    logger.info(f"Loaded {len(state_dict_gt)} compatible parameters for GT model")
     
     # Load Prediction model
     logger.info(f"Loading Prediction model from: {args.pred_checkpoint}")
@@ -516,9 +539,9 @@ if __name__ == '__main__':
     
     # Filter out SMPL parameters
     state_dict_pred = {k: v for k, v in checkpoint_pred['model'].items() if not k.startswith('smpl.')}
-    network_pred.load_state_dict(state_dict_pred, strict=False)
+    state_dict_pred = load_compatible_state_dict(network_pred, state_dict_pred, "Pred")
     network_pred.eval()
-    logger.info(f"Loaded {len(state_dict_pred)} parameters for Pred model")
+    logger.info(f"Loaded {len(state_dict_pred)} compatible parameters for Pred model")
     
     # Output folder
     sequence = '.'.join(args.video.split('/')[-1].split('.')[:-1])

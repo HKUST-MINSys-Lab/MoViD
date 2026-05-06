@@ -31,11 +31,23 @@ def build_network(cfg, smpl):
     if os.path.isfile(cfg.TRAIN.CHECKPOINT):
         checkpoint = torch.load(cfg.TRAIN.CHECKPOINT)
         ignore_keys = ['smpl.body_pose', 'smpl.betas', 'smpl.global_orient', 'smpl.J_regressor_extra', 'smpl.J_regressor_eval']
-        model_state_dict = {k: v for k, v in checkpoint['model'].items() if k not in ignore_keys}
+        checkpoint_state_dict = {k: v for k, v in checkpoint['model'].items() if k not in ignore_keys}
+        model_state_dict = network.state_dict()
+        state_dict_to_load = {}
+        skipped_shape_keys = []
+        for k, v_checkpoint in checkpoint_state_dict.items():
+            if k not in model_state_dict:
+                continue
+            if v_checkpoint.shape == model_state_dict[k].shape:
+                state_dict_to_load[k] = v_checkpoint
+            else:
+                skipped_shape_keys.append(k)
         # keys = [k for k in checkpoint['model'].keys() if 'motion_encoder' in k]
         # model_state_dict = {k: v for k, v in checkpoint['model'].items() if k in keys}
-        network.load_state_dict(model_state_dict, strict=False)
-        logger.info(f"=> loaded checkpoint '{cfg.TRAIN.CHECKPOINT}' ")
+        network.load_state_dict(state_dict_to_load, strict=False)
+        if skipped_shape_keys:
+            logger.warning(f"=> skipped {len(skipped_shape_keys)} shape-mismatched checkpoint keys")
+        logger.info(f"=> loaded compatible checkpoint weights from '{cfg.TRAIN.CHECKPOINT}' ")
     else:
         logger.info(f"=> Warning! no checkpoint found at '{cfg.TRAIN.CHECKPOINT}'.")
         
