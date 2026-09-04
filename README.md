@@ -107,7 +107,7 @@ python train.py --cfg configs/yamls/stage2.yaml NUM_WORKERS 0
 Evaluate:
 
 ```bash
-bash scripts/eval/run_eval.sh 3dpw checkpoints/movid_vit_w_3dpw.pth.tar
+bash scripts/eval/run_eval.sh 3dpw output/train_runs/motion_only_decoder_stage2/model_best.pth.tar
 ```
 
 ### Edge Runtime

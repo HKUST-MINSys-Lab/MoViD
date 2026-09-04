@@ -410,6 +410,10 @@ class Network(nn.Module):
             'view_feat_explained_variance': explained_variance_score.item()
         }
 
+    @staticmethod
+    def compute_motion_view_cosine(projected_motion_context, view_feat, eps=1e-8):
+        return F.cosine_similarity(projected_motion_context, view_feat, dim=-1, eps=eps)
+
     def _decode_prediction_branch(self, pred_kp3d, motion_context, view_feat, init_smpl,
                                   init_root, cam_angvel, img_features=None,
                                   use_img_features=False):
@@ -449,6 +453,7 @@ class Network(nn.Module):
             'pred_global_orient': pred_global_orient,
             'pred_cam': pred_cam,
             'motion_context': projected_motion_context,
+            'fused_motion_context': fused_motion_context,
             'motion_context_with_kp3d': projected_context_with_kp3d,
             'pred_body_pose': pred_body_pose,
             'pred_shape': pred_shape,
@@ -459,7 +464,8 @@ class Network(nn.Module):
         }
 
     def forward(self, x, gt, inits, img_features=None, atten=True, mask=None, init_root=None, cam_angvel=None,
-                cam_intrinsics=None, bbox=None, res=None, return_y_up=False, refine_traj=True, **kwargs):
+                cam_intrinsics=None, bbox=None, res=None, return_y_up=False, refine_traj=True,
+                return_feature_orthogonality=False, **kwargs):
 
         x = self.preprocess(x, mask)
         init_kp, init_smpl = inits
@@ -477,6 +483,8 @@ class Network(nn.Module):
         self.old_motion_context = main_branch['old_motion_context']
         self.motion_context_with_kp3d = main_branch['motion_context_with_kp3d']
         self.motion_context = main_branch['motion_context']
+        self.projected_motion_context = main_branch['motion_context']
+        self.fused_motion_context = main_branch['fused_motion_context']
         self.view_feat = view_feat
 
         # --------- Register predictions --------- #
@@ -529,6 +537,16 @@ class Network(nn.Module):
 
             output['ortho_loss'] = main_branch['ortho_loss']
             output['contrastive_loss'] = contrastive_loss
+
+        if return_feature_orthogonality:
+            output.update({
+                'projected_motion_context': self.projected_motion_context.detach(),
+                'fused_motion_context': self.fused_motion_context.detach(),
+                'view_feat': self.view_feat.detach(),
+                'motion_view_cosine': self.compute_motion_view_cosine(
+                    self.projected_motion_context, self.view_feat
+                ).detach(),
+            })
         
         return output
 
@@ -688,6 +706,10 @@ class Network(nn.Module):
 
         # Stage 5. Apply dynamic projection to decouple motion from view
         motion_context_decoupled = self.dynamic_projection(motion_context_fused, view_feat)
+        self.fused_motion_context = motion_context_fused
+        self.motion_context = motion_context_decoupled
+        self.projected_motion_context = motion_context_decoupled
+        self.view_feat = view_feat
 
         # Keep a context+kp3d history for trajectory/view/refiner paths. The
         # body-pose decoder must receive only the projected motion feature.

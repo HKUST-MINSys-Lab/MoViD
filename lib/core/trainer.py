@@ -15,7 +15,9 @@
 # Contact: ps-license@tuebingen.mpg.de
 
 import time
+import json
 import torch
+import torch.nn.functional as F
 import shutil
 import logging
 import numpy as np
@@ -39,6 +41,7 @@ from lib.eval.eval_utils import (
 from lib.models import build_body_model
 
 logger = logging.getLogger(__name__)
+FEATURE_EPS = 1e-8
 
 
 def visualize_alignment(pred_verts, gt_verts, pred_joints, gt_joints, 
@@ -205,6 +208,10 @@ class Trainer():
                  viz_enabled=False,
                  viz_num_samples=3,
                  viz_frames_per_sample=3,
+                 feature_ortho_viz_enabled=False,
+                 feature_ortho_viz_interval=0,
+                 feature_ortho_viz_max_samples=128,
+                 feature_ortho_viz_save_dump=True,
                  ):
         
         self.train_loader, self.valid_loader = data_loaders
@@ -230,6 +237,10 @@ class Trainer():
         self.viz_enabled = viz_enabled
         self.viz_num_samples = viz_num_samples
         self.viz_frames_per_sample = viz_frames_per_sample
+        self.feature_ortho_viz_enabled = feature_ortho_viz_enabled
+        self.feature_ortho_viz_interval = feature_ortho_viz_interval
+        self.feature_ortho_viz_max_samples = feature_ortho_viz_max_samples
+        self.feature_ortho_viz_save_dump = feature_ortho_viz_save_dump
         
         self.performance_type = performance_type
         self.train_global_step = 0
@@ -263,6 +274,11 @@ class Trainer():
             self.viz_dir = osp.join(self.logdir, 'validation_viz')
             os.makedirs(self.viz_dir, exist_ok=True)
             logger.info(f"Validation visualizations will be saved to: {self.viz_dir}")
+
+        if self.feature_ortho_viz_enabled:
+            self.feature_ortho_viz_dir = osp.join(self.logdir, 'feature_orthogonality')
+            os.makedirs(self.feature_ortho_viz_dir, exist_ok=True)
+            logger.info(f"Feature orthogonality visualizations will be saved to: {self.feature_ortho_viz_dir}")
             
         if checkpoint is not None:
             self.load_pretrained(checkpoint)
@@ -294,7 +310,11 @@ class Trainer():
             timer['data'] = time.time() - start
             start = time.time()
             
-            pred = self.network(x, gt, inits, features, **kwargs)
+            pred = self.network(
+                x, gt, inits, features,
+                return_feature_orthogonality=self.feature_ortho_viz_enabled,
+                **kwargs
+            )
             timer['forward'] = time.time() - start
             start = time.time()
             # =======>
@@ -339,6 +359,13 @@ class Trainer():
             if (i + 1) % self.summary_iter == 0:
                 self.writer.add_scalar('train_loss/loss', total_loss.item(), global_step=self.train_global_step)
 
+            if self.feature_ortho_viz_enabled and (i + 1) % self._feature_ortho_interval() == 0:
+                ortho_metrics = self._log_feature_orthogonality(
+                    pred, phase='train', step=self.train_global_step, save_visual=True
+                )
+                if 'paired_mean_abs_cosine' in ortho_metrics:
+                    summary_string += f' | ortho |cos|: {ortho_metrics["paired_mean_abs_cosine"]:.4f}'
+
             self.train_global_step += 1
             bar.suffix = summary_string
             bar.next(1)
@@ -374,7 +401,15 @@ class Trainer():
                 x, inits, features, kwargs, gt = prepare_batch(batch, self.device, self.train_stage=='stage2')
                 
                 # <======= Feedforward 
-                pred = self.network(x, gt, inits, features, **kwargs)
+                pred = self.network(
+                    x, gt, inits, features,
+                    return_feature_orthogonality=self.feature_ortho_viz_enabled,
+                    **kwargs
+                )
+                if self.feature_ortho_viz_enabled and i == 0:
+                    self._log_feature_orthogonality(
+                        pred, phase='val', step=self.epoch, save_visual=True
+                    )
                 
                 # 3DPW dataset has groundtruth vertices
                 # NOTE: Following SPIN, we compute PVE against ground truth from Gendered SMPL mesh
@@ -506,6 +541,218 @@ class Trainer():
                 )
         
         logger.info(f"✅ Saved {len(self.viz_accumulators['pred_verts']) * len(frame_indices)} visualizations to {epoch_viz_dir}")
+
+    def _feature_ortho_interval(self):
+        interval = self.feature_ortho_viz_interval
+        if interval is None or interval <= 0:
+            return max(1, self.summary_iter)
+        return interval
+
+    def _flatten_pair_for_orthogonality(self, motion, view, raw_motion=None):
+        if motion is None or view is None:
+            return None, None, None
+
+        motion = motion.detach().float()
+        view = view.detach().float()
+        if motion.shape[-1] != view.shape[-1]:
+            logger.warning(
+                "Cannot visualize motion-view orthogonality because feature dims differ: "
+                f"{motion.shape[-1]} vs {view.shape[-1]}"
+            )
+            return None, None, None
+
+        motion_flat = motion.reshape(-1, motion.shape[-1])
+        view_flat = view.reshape(-1, view.shape[-1])
+        n = min(motion_flat.shape[0], view_flat.shape[0])
+        motion_flat = motion_flat[:n]
+        view_flat = view_flat[:n]
+
+        raw_flat = None
+        if raw_motion is not None and raw_motion.shape[-1] == motion.shape[-1]:
+            raw_flat = raw_motion.detach().float().reshape(-1, raw_motion.shape[-1])[:n]
+
+        mask = (
+            torch.isfinite(motion_flat).all(dim=1)
+            & torch.isfinite(view_flat).all(dim=1)
+            & (torch.linalg.vector_norm(motion_flat, dim=1) > FEATURE_EPS)
+            & (torch.linalg.vector_norm(view_flat, dim=1) > FEATURE_EPS)
+        )
+        if raw_flat is not None:
+            mask = mask & torch.isfinite(raw_flat).all(dim=1) & (
+                torch.linalg.vector_norm(raw_flat, dim=1) > FEATURE_EPS
+            )
+
+        motion_flat = motion_flat[mask]
+        view_flat = view_flat[mask]
+        raw_flat = raw_flat[mask] if raw_flat is not None else None
+        if motion_flat.numel() == 0:
+            logger.warning("Cannot visualize motion-view orthogonality because no valid feature vectors remain.")
+            return None, None, None
+        return motion_flat, view_flat, raw_flat
+
+    def _sample_cross_cosine(self, motion, view):
+        max_samples = max(1, int(self.feature_ortho_viz_max_samples))
+        n_motion = min(max_samples, motion.shape[0])
+        n_view = min(max_samples, view.shape[0])
+        motion_idx = torch.linspace(0, motion.shape[0] - 1, steps=n_motion, device=motion.device).long()
+        view_idx = torch.linspace(0, view.shape[0] - 1, steps=n_view, device=view.device).long()
+        motion_sample = F.normalize(motion[motion_idx], p=2, dim=-1, eps=FEATURE_EPS)
+        view_sample = F.normalize(view[view_idx], p=2, dim=-1, eps=FEATURE_EPS)
+        return motion_sample @ view_sample.t()
+
+    def _compute_feature_orthogonality_metrics(self, motion, view, raw_motion=None):
+        paired_cosine = F.cosine_similarity(motion, view, dim=-1, eps=FEATURE_EPS)
+        abs_cosine = paired_cosine.abs()
+        cross_cosine = self._sample_cross_cosine(motion, view)
+
+        metrics = {
+            'num_vectors': int(paired_cosine.numel()),
+            'feature_dim': int(motion.shape[-1]),
+            'paired_mean_cosine': float(paired_cosine.mean().item()),
+            'paired_mean_abs_cosine': float(abs_cosine.mean().item()),
+            'paired_median_abs_cosine': float(abs_cosine.median().item()),
+            'paired_p95_abs_cosine': float(torch.quantile(abs_cosine, 0.95).item()),
+            'paired_max_abs_cosine': float(abs_cosine.max().item()),
+            'paired_rms_cosine': float(torch.sqrt(torch.mean(paired_cosine.square())).item()),
+            'cross_mean_abs_cosine': float(cross_cosine.abs().mean().item()),
+            'cross_rms_cosine': float(torch.sqrt(torch.mean(cross_cosine.square())).item()),
+        }
+
+        raw_cosine = None
+        if raw_motion is not None:
+            raw_cosine = F.cosine_similarity(raw_motion, view, dim=-1, eps=FEATURE_EPS)
+            raw_abs_cosine = raw_cosine.abs()
+            metrics.update({
+                'raw_paired_mean_abs_cosine': float(raw_abs_cosine.mean().item()),
+                'raw_paired_p95_abs_cosine': float(torch.quantile(raw_abs_cosine, 0.95).item()),
+                'projection_mean_abs_cosine_delta': float(
+                    raw_abs_cosine.mean().item() - abs_cosine.mean().item()
+                ),
+            })
+
+        return metrics, paired_cosine, cross_cosine, raw_cosine
+
+    def _save_feature_orthogonality_dashboard(self, metrics, paired_cosine, cross_cosine, raw_cosine,
+                                              output_path, phase, step):
+        paired_np = paired_cosine.detach().cpu().numpy()
+        abs_paired_np = np.abs(paired_np)
+        cross_np = cross_cosine.detach().cpu().numpy()
+
+        fig, axes = plt.subplots(2, 2, figsize=(11.5, 8.5))
+        heat_ax, hist_ax, line_ax, bar_ax = axes.ravel()
+
+        im = heat_ax.imshow(cross_np, vmin=-1.0, vmax=1.0, cmap='coolwarm', aspect='auto')
+        heat_ax.set_title('Cross-Sample Cosine Heatmap')
+        heat_ax.set_xlabel('view_feat sample')
+        heat_ax.set_ylabel('projected_motion_context sample')
+        heat_ax.set_xticks([])
+        heat_ax.set_yticks([])
+        fig.colorbar(im, ax=heat_ax, fraction=0.046, pad=0.04)
+
+        hist_ax.hist(
+            paired_np, bins=50, color='#4C78A8', alpha=0.85,
+            edgecolor='white', linewidth=0.5, label='projected'
+        )
+        hist_ax.axvline(0.0, color='#111827', linestyle='--', linewidth=1.2, label='zero')
+        hist_ax.axvline(float(np.mean(paired_np)), color='#D62728', linewidth=1.2, label='projected mean')
+        hist_ax.set_title('Paired Cosine Distribution')
+        hist_ax.set_xlabel('cos(projected_motion_context, view_feat)')
+        hist_ax.set_ylabel('count')
+        hist_ax.set_xlim(-1.0, 1.0)
+        hist_ax.grid(axis='y', alpha=0.25, linestyle='--')
+
+        line_ax.plot(abs_paired_np, color='#2E86AB', linewidth=1.0)
+        line_ax.axhline(float(np.mean(abs_paired_np)), color='#D62728', linestyle='--', linewidth=1.2)
+        line_ax.set_title('Absolute Paired Cosine by Sample')
+        line_ax.set_xlabel('flattened sample index')
+        line_ax.set_ylabel('|cos|')
+        line_ax.set_ylim(0.0, min(1.0, max(0.05, float(np.percentile(abs_paired_np, 99)) * 1.2)))
+        line_ax.grid(axis='y', alpha=0.25, linestyle='--')
+
+        names = ['projected mean |cos|', 'projected p95 |cos|', 'projected RMS']
+        values = [
+            metrics['paired_mean_abs_cosine'],
+            metrics['paired_p95_abs_cosine'],
+            metrics['paired_rms_cosine'],
+        ]
+        colors = ['#4C78A8', '#D62728', '#72B7B2']
+        if raw_cosine is not None:
+            raw_np = raw_cosine.detach().cpu().numpy()
+            names = ['raw mean |cos|', 'projected mean |cos|', 'raw p95 |cos|', 'projected p95 |cos|']
+            values = [
+                metrics['raw_paired_mean_abs_cosine'],
+                metrics['paired_mean_abs_cosine'],
+                metrics['raw_paired_p95_abs_cosine'],
+                metrics['paired_p95_abs_cosine'],
+            ]
+            colors = ['#B279A2', '#4C78A8', '#F58518', '#72B7B2']
+            hist_ax.hist(raw_np, bins=50, color='#B279A2', alpha=0.32, edgecolor='none', label='raw fused')
+            hist_ax.legend(frameon=False, fontsize=8)
+
+        bar_ax.bar(names, values, color=colors)
+        bar_ax.set_title('Orthogonality Summary')
+        bar_ax.set_ylabel('lower is more orthogonal')
+        bar_ax.set_ylim(0.0, min(1.0, max(values) * 1.25 if values else 1.0))
+        bar_ax.tick_params(axis='x', rotation=18)
+        bar_ax.grid(axis='y', alpha=0.25, linestyle='--')
+        for idx, value in enumerate(values):
+            bar_ax.text(idx, value, f'{value:.4f}', ha='center', va='bottom', fontsize=9)
+
+        fig.suptitle(f'{phase} Motion-View Feature Orthogonality (step {step})', fontsize=15)
+        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        fig.savefig(output_path, dpi=220, bbox_inches='tight')
+        if hasattr(self.writer, 'add_figure'):
+            self.writer.add_figure(f'{phase}_orthogonality/dashboard', fig, global_step=step, close=False)
+        plt.close(fig)
+
+    def _log_feature_orthogonality(self, pred, phase, step, save_visual=True):
+        motion = pred.get('projected_motion_context', None)
+        view = pred.get('view_feat', None)
+        raw_motion = pred.get('fused_motion_context', None)
+
+        if motion is None and hasattr(self.network, 'projected_motion_context'):
+            motion = self.network.projected_motion_context
+        if view is None and hasattr(self.network, 'view_feat'):
+            view = self.network.view_feat
+        if raw_motion is None and hasattr(self.network, 'fused_motion_context'):
+            raw_motion = self.network.fused_motion_context
+
+        motion, view, raw_motion = self._flatten_pair_for_orthogonality(motion, view, raw_motion)
+        if motion is None or view is None:
+            return {}
+
+        metrics, paired_cosine, cross_cosine, raw_cosine = self._compute_feature_orthogonality_metrics(
+            motion, view, raw_motion
+        )
+
+        for key, value in metrics.items():
+            if isinstance(value, (int, float)) and key != 'num_vectors':
+                self.writer.add_scalar(f'{phase}_orthogonality/{key}', value, global_step=step)
+
+        if save_visual:
+            os.makedirs(self.feature_ortho_viz_dir, exist_ok=True)
+            prefix = f'{phase}_step_{step:08d}'
+            png_path = osp.join(self.feature_ortho_viz_dir, f'{prefix}_dashboard.png')
+            json_path = osp.join(self.feature_ortho_viz_dir, f'{prefix}_metrics.json')
+            self._save_feature_orthogonality_dashboard(
+                metrics, paired_cosine, cross_cosine, raw_cosine, png_path, phase, step
+            )
+            with open(json_path, 'w', encoding='utf-8') as handle:
+                json.dump(metrics, handle, indent=2, sort_keys=True)
+            if self.feature_ortho_viz_save_dump:
+                dump = {
+                    'projected_motion_context': motion.detach().cpu(),
+                    'view_feat': view.detach().cpu(),
+                    'paired_cosine': paired_cosine.detach().cpu(),
+                    'metrics': metrics,
+                }
+                if raw_motion is not None:
+                    dump['fused_motion_context'] = raw_motion.detach().cpu()
+                    dump['raw_paired_cosine'] = raw_cosine.detach().cpu()
+                torch.save(dump, osp.join(self.feature_ortho_viz_dir, f'{prefix}_features.pt'))
+            logger.info(f'Saved feature orthogonality visualization to {png_path}')
+
+        return metrics
     
     def evaluate(self, ):
         for k, v in self.evaluation_accumulators.items():

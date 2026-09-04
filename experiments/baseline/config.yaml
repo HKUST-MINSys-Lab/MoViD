@@ -1,0 +1,97 @@
+!!python/object/new:yacs.config.CfgNode
+dictitems:
+  DATASET: !!python/object/new:yacs.config.CfgNode
+    dictitems:
+      RATIO:
+      - 1.0
+      - 0
+      - 0
+      - 0
+      - 0
+      SEQLEN: 81
+    state:
+      __deprecated_keys__: !!set {}
+      __immutable__: false
+      __new_allowed__: false
+      __renamed_keys__: {}
+  DEBUG: false
+  DEVICE: cuda
+  EVAL: true
+  EXP_NAME: baseline
+  FLIP_EVAL: true
+  LOGDIR: experiments/baseline
+  LOSS: !!python/object/new:yacs.config.CfgNode
+    dictitems:
+      CAMERA_LOSS_SKIP_EPOCH: 5
+      CAMERA_LOSS_WEIGHT: 0.04
+      CASCADED_LOSS_WEIGHT: 0.0
+      CONTACT_LOSS_WEIGHT: 0.04
+      DIFFUSION_LOSS_WEIGHT: 5.0
+      JOINT2D_LOSS_WEIGHT: 5.0
+      JOINT3D_LOSS_WEIGHT: 5.0
+      LOSS_WEIGHT: 60.0
+      POSE_LOSS_WEIGHT: 1.0
+      ROOT_POSE_LOSS_WEIGHT: 0.4
+      ROOT_VEL_LOSS_WEIGHT: 0.001
+      SHAPE_LOSS_WEIGHT: 0.001
+      SLIDING_LOSS_WEIGHT: 0.5
+      VERTS3D_LOSS_WEIGHT: 1.0
+    state:
+      __deprecated_keys__: !!set {}
+      __immutable__: false
+      __new_allowed__: false
+      __renamed_keys__: {}
+  MODEL: !!python/object/new:yacs.config.CfgNode
+    dictitems:
+      BACKBONE: vit
+    state:
+      __deprecated_keys__: !!set {}
+      __immutable__: false
+      __new_allowed__: false
+      __renamed_keys__: {}
+  MODEL_CONFIG: /data/yjliu/MoViD/configs/yamls/model_base.yaml
+  NUM_WORKERS: 0
+  ORTHO_VIZ: !!python/object/new:yacs.config.CfgNode
+    dictitems:
+      ENABLED: false
+      INTERVAL: 0
+      MAX_SAMPLES: 128
+      SAVE_FEATURE_DUMP: true
+    state:
+      __deprecated_keys__: !!set {}
+      __immutable__: false
+      __new_allowed__: false
+      __renamed_keys__: {}
+  OUTPUT_DIR: experiments/
+  RESUME: false
+  SEED_VALUE: -1
+  SUMMARY_ITER: 50
+  TITLE: default
+  TRAIN: !!python/object/new:yacs.config.CfgNode
+    dictitems:
+      BATCH_SIZE: 64
+      CHECKPOINT: /data/yjliu/MoViD/output/train_runs/motion_only_decoder_stage2/model_best.pth.tar
+      DATASET_EVAL: 3dpw
+      END_EPOCH: 999
+      LR: 0.0003
+      LR_DECAY_RATIO: 0.1
+      LR_FINETUNE: 5.0e-05
+      LR_PATIENCE: 5
+      MILESTONES:
+      - 50
+      - 70
+      MOMENTUM: 0.9
+      OPTIM: Adam
+      STAGE: stage2
+      START_EPOCH: 0
+      WD: 0.0
+    state:
+      __deprecated_keys__: !!set {}
+      __immutable__: false
+      __new_allowed__: false
+      __renamed_keys__: {}
+state:
+  __deprecated_keys__: !!set {}
+  __immutable__: false
+  __new_allowed__: false
+  __renamed_keys__: {}

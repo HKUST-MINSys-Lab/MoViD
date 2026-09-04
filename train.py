@@ -121,6 +121,10 @@ def main(cfg):
         resume=cfg.RESUME,
         logdir=cfg.LOGDIR,
         summary_iter=cfg.SUMMARY_ITER,
+        feature_ortho_viz_enabled=cfg.ORTHO_VIZ.ENABLED,
+        feature_ortho_viz_interval=cfg.ORTHO_VIZ.INTERVAL,
+        feature_ortho_viz_max_samples=cfg.ORTHO_VIZ.MAX_SAMPLES,
+        feature_ortho_viz_save_dump=cfg.ORTHO_VIZ.SAVE_FEATURE_DUMP,
     ).fit()
     
     
