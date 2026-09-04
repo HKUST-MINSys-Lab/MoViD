@@ -12,6 +12,7 @@ __pycache__/
 .DS_Store
 
 # Local-only workspace
+/.codex
 /.local/
 /archive/
 /ASD/
@@ -22,6 +23,17 @@ __pycache__/
 /logs/
 /output/
 /work_dirs/
+
+# Generated figures and plots (keep curated docs/assets tracked)
+/figures/
+/new_figures/
+/figure.ipynb
+/plot.py
+/plot/
+/plots/
+/scripts/visualize_comparison_table.py
+/**/feature_orthogonality/
+/**/feature_orthogonality_*/
 
 # Downloaded / generated assets
 /examples/
